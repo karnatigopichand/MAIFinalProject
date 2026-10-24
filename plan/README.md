@@ -9,6 +9,7 @@ Read in this order:
 3. [Technical Debt Agent](technical-debt-agent.md): related improvements and opportunities to share testing.
 4. [Risk and Report Agent](risk-report-agent.md): verification, business risk, and final response.
 5. [Shared contracts and integration](shared-contracts.md): interfaces that allow independent development.
+6. [E-commerce implementation plan](ecommerce-implementation-plan.md): Codex work sequence, implemented sample services, tests, documentation, and remaining integration work.
 
 Target completion: November 6–7, 2026. Demo: November 10, 2026.
 

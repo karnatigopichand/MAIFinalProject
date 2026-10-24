@@ -1,0 +1,30 @@
+{
+  "service": "commerce-notifications",
+  "environment": "local",
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8005
+  },
+  "database": {
+    "path": "data/notifications.sqlite"
+  },
+  "api": {
+    "read_path": "/notifications",
+    "record_kind": "outbox",
+    "write_routes": {}
+  },
+  "http": {},
+  "mq": {
+    "host": "127.0.0.1",
+    "port": 61613,
+    "tls": false,
+    "username_env": "ACTIVEMQ_USERNAME",
+    "password_env": "ACTIVEMQ_PASSWORD",
+    "receipt_timeout_seconds": 5,
+    "publish": {},
+    "consume": {
+      "/queue/commerce.notifications.order-confirmed.v1": "order.confirmed.v1",
+      "/queue/commerce.notifications.shipment-created.v1": "shipment.created.v1"
+    }
+  }
+}

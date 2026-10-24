@@ -1,0 +1,33 @@
+{
+  "endpoint": null,
+  "calls": [],
+  "publishes": [],
+  "consumes": [
+    "order.confirmed.v1",
+    "shipment.created.v1"
+  ],
+  "mappings": {
+    "order_id": "template.order_id",
+    "tracking_number": "template.tracking_number"
+  },
+  "repository": "commerce-notifications",
+  "logical_tables": [
+    "outbox"
+  ],
+  "storage": "SQLite records(kind,key,payload), PRIMARY KEY(kind,key)",
+  "transport": "HTTP JSON and ActiveMQ Classic STOMP 1.2",
+  "server_port": 8005,
+  "read_endpoint": "GET /notifications/{id}",
+  "write_routes": {},
+  "config_files": [
+    "config/local.json",
+    "config/development.json"
+  ],
+  "queues": {
+    "publish": {},
+    "consume": {
+      "/queue/commerce.notifications.order-confirmed.v1": "order.confirmed.v1",
+      "/queue/commerce.notifications.shipment-created.v1": "shipment.created.v1"
+    }
+  }
+}

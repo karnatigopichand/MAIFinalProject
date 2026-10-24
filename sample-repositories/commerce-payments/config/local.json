@@ -1,0 +1,39 @@
+{
+  "service": "commerce-payments",
+  "environment": "local",
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8003
+  },
+  "database": {
+    "path": "data/payments.sqlite"
+  },
+  "api": {
+    "read_path": "/authorizations",
+    "record_kind": "authorizations",
+    "write_routes": {
+      "/authorizations": "authorize"
+    }
+  },
+  "http": {
+    "payment-provider-api": {
+      "scheme": "http",
+      "host": "127.0.0.1",
+      "port": 9000,
+      "endpoints": {
+        "primary": "/charges"
+      },
+      "timeout_seconds": 5
+    }
+  },
+  "mq": {
+    "host": "127.0.0.1",
+    "port": 61613,
+    "tls": false,
+    "username_env": "ACTIVEMQ_USERNAME",
+    "password_env": "ACTIVEMQ_PASSWORD",
+    "receipt_timeout_seconds": 5,
+    "publish": {},
+    "consume": {}
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "review_date": "2026-10-24",
+  "repository": "commerce-payments",
+  "method": "Implementation-reviewed API and behavior documentation; hashes detect later source drift.",
+  "files": {
+    "config/development.json": "78a259246bcb06ff722e0ca05d39fec7f97a3f46d40bcdfe35c90670777af0da",
+    "config/local.json": "37848056533e0f7cb6aeb93f0b780e05f2a93884b7ce8136f3d2669ba7eb286b",
+    "contracts.json": "d19befe4b0f23cb44921d42c004c2f38a234276223728aa97ff47cf9434f6158",
+    "src/commerce_payments/__init__.py": "bd993736e3703534c868b54fa36af989893d33eef237562d6a22440f40c15cf6",
+    "src/commerce_payments/app.py": "514c407027add0ff798665fad425e29afe2858803c07cfbc4e5211f17118440a",
+    "src/commerce_payments/runtime.py": "6add01b5081ad2d3fd949f1a211b5345bf6e8a9e5c5397d14ce8d01a63977167",
+    "src/commerce_payments/service.py": "6db8916d0bf28d75c709ec5c717d95ebc052dd2ada334c6e5439b9793c9da470"
+  }
+}

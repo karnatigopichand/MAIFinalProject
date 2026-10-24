@@ -1,0 +1,14 @@
+{
+  "review_date": "2026-10-24",
+  "repository": "commerce-inventory",
+  "method": "Implementation-reviewed API and behavior documentation; hashes detect later source drift.",
+  "files": {
+    "config/development.json": "3e4ce43f5e2779d34208ba26bbe1157fec5a2352c4ade62bbfd32acad8756e51",
+    "config/local.json": "358c573917dbfd453599c9133f685490c05afa18220ce33f90929b09d764a367",
+    "contracts.json": "0b12153cb6bb443fc3892b0801cc862c6fc1f75eae7fec5899beb679e5e9500f",
+    "src/commerce_inventory/__init__.py": "bd993736e3703534c868b54fa36af989893d33eef237562d6a22440f40c15cf6",
+    "src/commerce_inventory/app.py": "514c407027add0ff798665fad425e29afe2858803c07cfbc4e5211f17118440a",
+    "src/commerce_inventory/runtime.py": "6add01b5081ad2d3fd949f1a211b5345bf6e8a9e5c5397d14ce8d01a63977167",
+    "src/commerce_inventory/service.py": "32535af41f55f5c0d7d39279956d4e00b7f84a952d6199bc7dcc09663470009d"
+  }
+}

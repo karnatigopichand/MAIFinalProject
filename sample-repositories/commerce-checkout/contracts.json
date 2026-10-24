@@ -1,0 +1,35 @@
+{
+  "endpoint": "POST /checkout",
+  "calls": [
+    {
+      "target": "commerce-orders",
+      "method": "POST",
+      "path": "/orders"
+    }
+  ],
+  "publishes": [],
+  "consumes": [],
+  "mappings": {
+    "cart.items": "items",
+    "delivery.address": "delivery_address"
+  },
+  "repository": "commerce-checkout",
+  "logical_tables": [
+    "checkouts"
+  ],
+  "storage": "SQLite records(kind,key,payload), PRIMARY KEY(kind,key)",
+  "transport": "HTTP JSON and ActiveMQ Classic STOMP 1.2",
+  "server_port": 8000,
+  "read_endpoint": "GET /checkouts/{id}",
+  "write_routes": {
+    "/checkout": "checkout"
+  },
+  "config_files": [
+    "config/local.json",
+    "config/development.json"
+  ],
+  "queues": {
+    "publish": {},
+    "consume": {}
+  }
+}

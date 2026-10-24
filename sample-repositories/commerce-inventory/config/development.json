@@ -1,0 +1,30 @@
+{
+  "service": "commerce-inventory",
+  "environment": "development",
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8002
+  },
+  "database": {
+    "path": "data/inventory.sqlite"
+  },
+  "api": {
+    "read_path": "/stock",
+    "record_kind": "stock",
+    "write_routes": {
+      "/reservations": "reserve",
+      "/stock": "seed_stock"
+    }
+  },
+  "http": {},
+  "mq": {
+    "host": "activemq",
+    "port": 61613,
+    "tls": false,
+    "username_env": "ACTIVEMQ_USERNAME",
+    "password_env": "ACTIVEMQ_PASSWORD",
+    "receipt_timeout_seconds": 5,
+    "publish": {},
+    "consume": {}
+  }
+}

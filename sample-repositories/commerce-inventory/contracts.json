@@ -1,0 +1,31 @@
+{
+  "endpoint": "POST /reservations",
+  "calls": [],
+  "publishes": [],
+  "consumes": [],
+  "mappings": {
+    "items[].sku": "stock.sku",
+    "items[].quantity": "stock.quantity"
+  },
+  "repository": "commerce-inventory",
+  "logical_tables": [
+    "stock",
+    "reservations"
+  ],
+  "storage": "SQLite records(kind,key,payload), PRIMARY KEY(kind,key)",
+  "transport": "HTTP JSON and ActiveMQ Classic STOMP 1.2",
+  "server_port": 8002,
+  "read_endpoint": "GET /stock/{id}",
+  "write_routes": {
+    "/reservations": "reserve",
+    "/stock": "seed_stock"
+  },
+  "config_files": [
+    "config/local.json",
+    "config/development.json"
+  ],
+  "queues": {
+    "publish": {},
+    "consume": {}
+  }
+}

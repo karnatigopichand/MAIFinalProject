@@ -1,0 +1,44 @@
+{
+  "endpoint": null,
+  "calls": [
+    {
+      "target": "carrier-provider-api",
+      "method": "POST",
+      "path": "/shipments"
+    }
+  ],
+  "publishes": [
+    "shipment.created.v1"
+  ],
+  "consumes": [
+    "order.confirmed.v1"
+  ],
+  "mappings": {
+    "delivery_address": "provider.address",
+    "provider.tracking_number": "shipment.created.v1.tracking_number"
+  },
+  "repository": "commerce-shipping",
+  "logical_tables": [
+    "shipments",
+    "published_events"
+  ],
+  "storage": "SQLite records(kind,key,payload), PRIMARY KEY(kind,key)",
+  "transport": "HTTP JSON and ActiveMQ Classic STOMP 1.2",
+  "server_port": 8004,
+  "read_endpoint": "GET /shipments/{id}",
+  "write_routes": {},
+  "config_files": [
+    "config/local.json",
+    "config/development.json"
+  ],
+  "queues": {
+    "publish": {
+      "shipment.created.v1": [
+        "/queue/commerce.notifications.shipment-created.v1"
+      ]
+    },
+    "consume": {
+      "/queue/commerce.shipping.order-confirmed.v1": "order.confirmed.v1"
+    }
+  }
+}

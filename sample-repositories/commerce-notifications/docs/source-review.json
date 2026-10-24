@@ -1,0 +1,14 @@
+{
+  "review_date": "2026-10-24",
+  "repository": "commerce-notifications",
+  "method": "Implementation-reviewed API and behavior documentation; hashes detect later source drift.",
+  "files": {
+    "config/development.json": "e0dd7447da2c8d0830ffd73f2b602649350f3484365e10db971cf2ae62e57df8",
+    "config/local.json": "0ce045f797ef2255c31e9c2bc3113274fb635ea50a65dee4d9c28b226348accd",
+    "contracts.json": "9733a5694efdbe7b56cb97aa944b97acd425ce03b65100ae107038b918464073",
+    "src/commerce_notifications/__init__.py": "bd993736e3703534c868b54fa36af989893d33eef237562d6a22440f40c15cf6",
+    "src/commerce_notifications/app.py": "514c407027add0ff798665fad425e29afe2858803c07cfbc4e5211f17118440a",
+    "src/commerce_notifications/runtime.py": "6add01b5081ad2d3fd949f1a211b5345bf6e8a9e5c5397d14ce8d01a63977167",
+    "src/commerce_notifications/service.py": "eac9e6bd23ce38024c1cc83c4e180f856f7e6ab87443328351bf34d1fad6c8f7"
+  }
+}

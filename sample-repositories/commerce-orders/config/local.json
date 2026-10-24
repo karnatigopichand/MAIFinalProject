@@ -1,0 +1,53 @@
+{
+  "service": "commerce-orders",
+  "environment": "local",
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8001
+  },
+  "database": {
+    "path": "data/orders.sqlite"
+  },
+  "api": {
+    "read_path": "/orders",
+    "record_kind": "orders",
+    "write_routes": {
+      "/orders": "create_order"
+    }
+  },
+  "http": {
+    "commerce-inventory": {
+      "scheme": "http",
+      "host": "127.0.0.1",
+      "port": 8002,
+      "endpoints": {
+        "primary": "/reservations"
+      },
+      "timeout_seconds": 5
+    },
+    "commerce-payments": {
+      "scheme": "http",
+      "host": "127.0.0.1",
+      "port": 8003,
+      "endpoints": {
+        "primary": "/authorizations"
+      },
+      "timeout_seconds": 5
+    }
+  },
+  "mq": {
+    "host": "127.0.0.1",
+    "port": 61613,
+    "tls": false,
+    "username_env": "ACTIVEMQ_USERNAME",
+    "password_env": "ACTIVEMQ_PASSWORD",
+    "receipt_timeout_seconds": 5,
+    "publish": {
+      "order.confirmed.v1": [
+        "/queue/commerce.shipping.order-confirmed.v1",
+        "/queue/commerce.notifications.order-confirmed.v1"
+      ]
+    },
+    "consume": {}
+  }
+}

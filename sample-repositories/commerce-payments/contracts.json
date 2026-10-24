@@ -1,0 +1,35 @@
+{
+  "endpoint": "POST /authorizations",
+  "calls": [
+    {
+      "target": "payment-provider-api",
+      "method": "POST",
+      "path": "/charges"
+    }
+  ],
+  "publishes": [],
+  "consumes": [],
+  "mappings": {
+    "amount_cents": "provider.amount",
+    "currency": "provider.currency"
+  },
+  "repository": "commerce-payments",
+  "logical_tables": [
+    "authorizations"
+  ],
+  "storage": "SQLite records(kind,key,payload), PRIMARY KEY(kind,key)",
+  "transport": "HTTP JSON and ActiveMQ Classic STOMP 1.2",
+  "server_port": 8003,
+  "read_endpoint": "GET /authorizations/{id}",
+  "write_routes": {
+    "/authorizations": "authorize"
+  },
+  "config_files": [
+    "config/local.json",
+    "config/development.json"
+  ],
+  "queues": {
+    "publish": {},
+    "consume": {}
+  }
+}

@@ -4,7 +4,7 @@
 
 Find small repository-local technical enhancements that overlap with the requirement's implementation and testing. Recommend opportunities to avoid repeated testing, without automatically expanding ticket scope.
 
-This agent searches `TECH_DEBT.md` and generated docs, not Jira backlog tickets. It proposes work; it does not implement it or mark debt resolved.
+This agent searches all `docs/technical-debt/**/*.md` files, optional root `TECH_DEBT.md`, and implementation-reviewed docs, not Jira backlog tickets. It proposes work; it does not implement it or mark debt resolved.
 
 ## Technical-debt document template
 

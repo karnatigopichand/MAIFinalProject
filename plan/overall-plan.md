@@ -12,7 +12,7 @@ Completion target: November 6–7, 2026. Demo day: November 10, 2026.
 
 - E-commerce sample application with six small, related repositories generated with Codex.
 - Python, LangChain/LangGraph, Pinecone semantic retrieval, and Neo4j graph traversal.
-- Generated documentation under each repository's `docs/` directory, with references back to code.
+- Implementation-reviewed documentation and OpenAPI specifications under each repository's `docs/` directory, with references back to code.
 - Multiple repository-local technical-debt Markdown documents under `docs/technical-debt/`; no backlog-ticket mining.
 - Three agents: Impact Investigation, Technical Debt, and Risk and Report.
 - Visible trace of tool calls, retrieved evidence, searches, dependency paths, routing, and results.
@@ -24,7 +24,7 @@ Completion target: November 6–7, 2026. Demo day: November 10, 2026.
 These defaults make implementation concrete but were not all separately confirmed:
 
 - Technical-debt eligibility: at most three person-hours per item, including implementation and testing. Two hours or less is preferred. Unknown effort cannot qualify automatically.
-- SQLite per state-owning service, a local RabbitMQ broker, FastAPI APIs, and stubbed external payment/carrier providers.
+- SQLite per state-owning service, runnable Python HTTP APIs, and ActiveMQ Classic STOMP queues. HTTP dependencies use environment-specific host/port/endpoint configuration; external payment/carrier APIs must be supplied by the deployment.
 - A dedicated Jira status such as `Ready for Impact Analysis`; exact status depends on site configuration.
 - Automatically post the report as a Jira comment and store the run result separately.
 - Database writes refer to controlled indexing of Pinecone/Neo4j and persistence of assessment results. Agents do not modify application business databases.
@@ -38,9 +38,11 @@ These defaults make implementation concrete but were not all separately confirme
 | `commerce-checkout` | Accept a cart and delivery details; submit an order | Checkout request and mapping to order request | Calls orders over HTTP |
 | `commerce-orders` | Create an order, reserve stock, authorize payment, publish confirmation | SQLite orders/order lines/delivery details; order API; `order.confirmed.v1` | Calls inventory and payments; publishes to shipping and notifications |
 | `commerce-inventory` | Reserve stock and reject insufficient inventory | SQLite stock and reservations; reservation API | Called by orders |
-| `commerce-payments` | Authorize a payment through a deterministic stub | SQLite authorization records; payment API; provider mapping | Called by orders |
-| `commerce-shipping` | Consume confirmed orders and create a shipment with a carrier stub | SQLite shipments; carrier mapping; `shipment.created.v1` | Consumes order event; publishes shipment event |
+| `commerce-payments` | Authorize a payment through an external HTTP provider | SQLite authorization records; payment API; provider mapping | Called by orders |
+| `commerce-shipping` | Consume confirmed orders and create a shipment through an external carrier HTTP API | SQLite shipments; carrier mapping; `shipment.created.v1` | Consumes order event; publishes shipment event |
 | `commerce-notifications` | Consume order/shipment events and render messages to a local outbox | SQLite notification outbox; templates and consumer schemas | Consumes order and shipment events |
+
+Runtime configuration and queue names are documented in [the sample service guide](../sample-repositories/README.md). APIs run on ports 8000–8005; shipping and notifications also run headless ActiveMQ workers. JSON logs support Datadog collection. HTTP and broker test doubles are confined to tests.
 
 These are six analysis targets. This workspace hosts the AI system and integration configuration separately; it is not a seventh business service. For initial scaffolding, sibling/local directories can be used, but the demo should identify each target with its own repository name and commit.
 
@@ -77,7 +79,7 @@ docs/
 README.md
 ```
 
-Generate docs from the implemented code and contracts, then inspect a sample manually. Each document records repository, source commit, generation timestamp, and source files/symbols. Do not generate fictional dependencies just to make the graph connected. Explicit configuration and schema files should establish HTTP routes, topics, publishers, and consumers.
+Write detailed documentation from implemented handlers, business methods, adapters, and config. Include OpenAPI specifications with request/response bodies, headers, security, configured addresses, and actual error mapping. Record repository identity, reviewed source references/hashes, review date, and immutable commit when available. The old summary generator is retired; validate reviewed docs without overwriting them. Do not generate fictional dependencies just to make the graph connected. Explicit configuration and schema files should establish HTTP routes, topics, publishers, and consumers.
 
 Each repository can have multiple technical-debt documents under `docs/technical-debt/`, including nested folders. Documents may be organized by component, concern, or enhancement, and each document can contain one or more debt items. The filenames above are illustrative; each repository uses names relevant to its own components. An existing root-level `TECH_DEBT.md` is also supported as an optional legacy location, not a required single source.
 
@@ -89,8 +91,8 @@ Every debt item needs a stable ID unique within its repository, affected compone
 
 Indexing runs separately from ticket assessment and consumes all six repositories. Each repository can contribute multiple general documents and multiple technical-debt documents; there is no one-document-per-repository limit.
 
-1. **Select a snapshot.** Record repository names and immutable commit IDs in a shared manifest. Record the documentation generation version and embedding model as part of the indexing version.
-2. **Prepare documentation.** Generate or refresh application docs under `docs/` from code and contracts, preserving source references. Preserve authored technical-debt documents; documentation generation must not overwrite their estimates or status.
+1. **Select a snapshot.** Record repository names and immutable commit IDs in a shared manifest. Record the reviewed documentation/source version and embedding model as part of the indexing version.
+2. **Prepare documentation.** Review and refresh application docs and OpenAPI specs under `docs/` against implemented code and config, preserving source references. Run the documentation validator to detect source drift. Preserve authored technical-debt estimates/status; do not overwrite reviewed documentation with generated summaries.
 3. **Discover documents.** Recursively scan `docs/**/*.md`. Classify `docs/technical-debt/**/*.md` as technical debt and other Markdown files as general documentation. Also include an optional root `TECH_DEBT.md`. Process each file once, even though debt files are inside `docs/`.
 4. **Parse and validate debt items.** A document can contain multiple items. Extract each item's stable ID, status, components, proposed change, implementation/testing estimates, estimate basis, relevant tests, document path, and section. IDs must be unique within a repository. Flag duplicate IDs and malformed items; retain actionable validation errors rather than silently recommending them.
 5. **Create retrieval chunks.** Chunk general docs by meaningful sections. Chunk debt by item, retaining its metadata with every chunk if a long item must be split. Use repository plus debt ID as the logical item identity, independent of document location. Preserve file/section provenance for citations.
@@ -219,6 +221,6 @@ Demo sequence: show a successful order flow, transition a Jira ticket, watch ret
 
 ## Scope boundaries and risks
 
-No autonomous code edits, deployments, real payment/carrier calls, backlog mining, or multi-platform agent distribution in the baseline. A2A and ticket revision comparison are optional after acceptance gates pass.
+No autonomous code edits, deployments, production payment/carrier transactions, backlog mining, or multi-platform agent distribution in the baseline. A2A and ticket revision comparison are optional after acceptance gates pass.
 
-Primary risks are generated documentation inaccuracies, stale snapshots, incomplete consumer discovery, underestimated technical debt, and hosted connectivity. Mitigate through source provenance, snapshot filtering, explicit contracts, conservative eligibility, early deployment checks, and reproducible fixtures. Treat repository/ticket text as data, not instructions that can override agent behavior.
+Primary risks are documentation inaccuracies, stale snapshots, incomplete consumer discovery, underestimated technical debt, and hosted connectivity. Mitigate through source provenance, snapshot filtering, explicit contracts, conservative eligibility, early deployment checks, and reproducible fixtures. Treat repository/ticket text as data, not instructions that can override agent behavior.

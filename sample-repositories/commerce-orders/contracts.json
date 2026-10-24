@@ -1,0 +1,49 @@
+{
+  "endpoint": "POST /orders",
+  "calls": [
+    {
+      "target": "commerce-inventory",
+      "method": "POST",
+      "path": "/reservations"
+    },
+    {
+      "target": "commerce-payments",
+      "method": "POST",
+      "path": "/authorizations"
+    }
+  ],
+  "publishes": [
+    "order.confirmed.v1"
+  ],
+  "consumes": [],
+  "mappings": {
+    "items": "reservation.items",
+    "total_cents": "amount_cents",
+    "delivery_address": "order.confirmed.v1.delivery_address"
+  },
+  "repository": "commerce-orders",
+  "logical_tables": [
+    "orders",
+    "published_events"
+  ],
+  "storage": "SQLite records(kind,key,payload), PRIMARY KEY(kind,key)",
+  "transport": "HTTP JSON and ActiveMQ Classic STOMP 1.2",
+  "server_port": 8001,
+  "read_endpoint": "GET /orders/{id}",
+  "write_routes": {
+    "/orders": "create_order"
+  },
+  "config_files": [
+    "config/local.json",
+    "config/development.json"
+  ],
+  "queues": {
+    "publish": {
+      "order.confirmed.v1": [
+        "/queue/commerce.shipping.order-confirmed.v1",
+        "/queue/commerce.notifications.order-confirmed.v1"
+      ]
+    },
+    "consume": {}
+  }
+}

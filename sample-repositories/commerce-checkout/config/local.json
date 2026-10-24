@@ -1,0 +1,39 @@
+{
+  "service": "commerce-checkout",
+  "environment": "local",
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8000
+  },
+  "database": {
+    "path": "data/checkout.sqlite"
+  },
+  "api": {
+    "read_path": "/checkouts",
+    "record_kind": "checkouts",
+    "write_routes": {
+      "/checkout": "checkout"
+    }
+  },
+  "http": {
+    "commerce-orders": {
+      "scheme": "http",
+      "host": "127.0.0.1",
+      "port": 8001,
+      "endpoints": {
+        "primary": "/orders"
+      },
+      "timeout_seconds": 5
+    }
+  },
+  "mq": {
+    "host": "127.0.0.1",
+    "port": 61613,
+    "tls": false,
+    "username_env": "ACTIVEMQ_USERNAME",
+    "password_env": "ACTIVEMQ_PASSWORD",
+    "receipt_timeout_seconds": 5,
+    "publish": {},
+    "consume": {}
+  }
+}

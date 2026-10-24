@@ -1,0 +1,43 @@
+{
+  "service": "commerce-shipping",
+  "environment": "development",
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8004
+  },
+  "database": {
+    "path": "data/shipping.sqlite"
+  },
+  "api": {
+    "read_path": "/shipments",
+    "record_kind": "shipments",
+    "write_routes": {}
+  },
+  "http": {
+    "carrier-provider-api": {
+      "scheme": "http",
+      "host": "carrier-provider-api",
+      "port": 9001,
+      "endpoints": {
+        "primary": "/shipments"
+      },
+      "timeout_seconds": 5
+    }
+  },
+  "mq": {
+    "host": "activemq",
+    "port": 61613,
+    "tls": false,
+    "username_env": "ACTIVEMQ_USERNAME",
+    "password_env": "ACTIVEMQ_PASSWORD",
+    "receipt_timeout_seconds": 5,
+    "publish": {
+      "shipment.created.v1": [
+        "/queue/commerce.notifications.shipment-created.v1"
+      ]
+    },
+    "consume": {
+      "/queue/commerce.shipping.order-confirmed.v1": "order.confirmed.v1"
+    }
+  }
+}

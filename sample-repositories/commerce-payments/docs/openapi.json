@@ -1,0 +1,429 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "commerce-payments HTTP API",
+    "version": "0.1.0",
+    "description": "Checks positive integer cents and USD, calls an external provider, and stores successful authorization metadata without the token. Implementation-reviewed supported contracts; runtime validation is partial. Configured servers are not verified deployments. Unknown routes return JSON 404 for GET/POST; unsupported methods use Python HTTP server HTML 501. GET storage failures are not normalized into a JSON error."
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8003",
+      "description": "Configured local listener; start process first."
+    },
+    {
+      "url": "http://commerce-payments:8003",
+      "description": "Configured development hostname; dummy DNS, not a verified deployment."
+    }
+  ],
+  "security": [],
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "paymentsHealth",
+        "summary": "Process liveness; no downstream check",
+        "responses": {
+          "200": {
+            "description": "Process is serving HTTP; does not prove dependencies are healthy.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                },
+                "example": {
+                  "service": "commerce-payments",
+                  "status": "up",
+                  "dependency_check": false
+                }
+              }
+            },
+            "headers": {
+              "Content-Length": {
+                "description": "Length of encoded JSON response in bytes.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RequestId"
+          }
+        ]
+      }
+    },
+    "/authorizations/{id}": {
+      "get": {
+        "operationId": "paymentsRead",
+        "summary": "Read one authorizations record",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Exact stored order_id; use an unescaped safe identifier.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "demo-1"
+          },
+          {
+            "$ref": "#/components/parameters/RequestId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stored JSON record.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Resource"
+                },
+                "example": {
+                  "order_id": "demo-1",
+                  "authorization_id": "AUTH-1",
+                  "status": "authorized"
+                }
+              }
+            },
+            "headers": {
+              "Content-Length": {
+                "description": "Length of encoded JSON response in bytes.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No stored record or unmatched path.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "not_found"
+                }
+              }
+            },
+            "headers": {
+              "Content-Length": {
+                "description": "Length of encoded JSON response in bytes.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/authorizations": {
+      "post": {
+        "operationId": "paymentsAuthorize",
+        "summary": "Payment authorization",
+        "description": "Schemas describe the supported client contract; the runtime does not perform full schema validation. Existing IDs may return stored results before validating all fields.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WriteRequest"
+              },
+              "example": {
+                "order_id": "demo-1",
+                "amount_cents": 2500,
+                "currency": "USD",
+                "payment_token": "demo-token"
+              }
+            }
+          },
+          "description": "JSON object; Content-Length must be 1\u20131048576 bytes. Content-Type application/json is recommended but not enforced. Chunked transfer is unsupported."
+        },
+        "responses": {
+          "200": {
+            "description": "Successful result, including sequential retries.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteResult"
+                },
+                "example": {
+                  "order_id": "demo-1",
+                  "authorization_id": "AUTH-1",
+                  "status": "authorized"
+                }
+              }
+            },
+            "headers": {
+              "Content-Length": {
+                "description": "Length of encoded JSON response in bytes.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "POST only: absent/zero/negative Content-Length, or declared length over 1,048,576 bytes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "invalid_body_size"
+                }
+              }
+            },
+            "headers": {
+              "Content-Length": {
+                "description": "Length of encoded JSON response in bytes.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "POST: invalid JSON, non-object body, nonnumeric Content-Length, missing keys, ValueError/KeyError/TypeError, or business rejection.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "validation": {
+                    "value": {
+                      "error": "invalid_request_or_business_rejection"
+                    }
+                  },
+                  "upstream4xx": {
+                    "value": {
+                      "error": "downstream_failure"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Content-Length": {
+                "description": "Length of encoded JSON response in bytes.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "POST: downstream network failure, timeout, or upstream HTTP status outside 4xx raised by HTTPClient.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "downstream_failure"
+                }
+              }
+            },
+            "headers": {
+              "Content-Length": {
+                "description": "Length of encoded JSON response in bytes.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "POST: otherwise uncaught exception, including broker receipt timeout or SQLite failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "dependency_or_storage_failure"
+                }
+              }
+            },
+            "headers": {
+              "Content-Length": {
+                "description": "Length of encoded JSON response in bytes.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RequestId"
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "LineItem": {
+        "type": "object",
+        "properties": {
+          "sku": {
+            "type": "string",
+            "description": "Stock keeping unit, e.g. book"
+          },
+          "quantity": {
+            "type": "integer",
+            "description": "Positive whole number; booleans are rejected by inventory.",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "sku",
+          "quantity"
+        ],
+        "additionalProperties": true
+      },
+      "Resource": {
+        "type": "object",
+        "properties": {
+          "order_id": {
+            "type": "string",
+            "description": ""
+          },
+          "authorization_id": {
+            "type": "string",
+            "description": "Returned by external provider."
+          },
+          "status": {
+            "type": "string",
+            "const": "authorized"
+          }
+        },
+        "required": [
+          "order_id",
+          "authorization_id",
+          "status"
+        ],
+        "additionalProperties": true
+      },
+      "Health": {
+        "type": "object",
+        "properties": {
+          "service": {
+            "type": "string",
+            "const": "commerce-payments"
+          },
+          "status": {
+            "type": "string",
+            "const": "up"
+          },
+          "dependency_check": {
+            "type": "boolean",
+            "const": false
+          }
+        },
+        "required": [
+          "service",
+          "status",
+          "dependency_check"
+        ],
+        "additionalProperties": true
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": ""
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "additionalProperties": true
+      },
+      "WriteRequest": {
+        "type": "object",
+        "properties": {
+          "order_id": {
+            "type": "string",
+            "description": ""
+          },
+          "amount_cents": {
+            "type": "integer",
+            "description": "Strict positive integer.",
+            "minimum": 1
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "USD"
+            ]
+          },
+          "payment_token": {
+            "type": "string",
+            "description": ""
+          }
+        },
+        "required": [
+          "order_id",
+          "amount_cents",
+          "currency",
+          "payment_token"
+        ],
+        "additionalProperties": true
+      },
+      "WriteResult": {
+        "type": "object",
+        "properties": {
+          "order_id": {
+            "type": "string",
+            "description": ""
+          },
+          "authorization_id": {
+            "type": "string",
+            "description": "Returned by external provider."
+          },
+          "status": {
+            "type": "string",
+            "const": "authorized"
+          }
+        },
+        "required": [
+          "order_id",
+          "authorization_id",
+          "status"
+        ],
+        "additionalProperties": true
+      }
+    },
+    "parameters": {
+      "RequestId": {
+        "name": "X-Request-ID",
+        "in": "header",
+        "required": false,
+        "description": "Accepted but ignored by this implementation: not propagated or echoed. Outbound calls generate independent IDs.",
+        "schema": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "externalDocs": {
+    "url": "https://spec.openapis.org/oas/v3.1.0.html",
+    "description": "OpenAPI format reference"
+  },
+  "x-source-files": [
+    "src/commerce_payments/app.py",
+    "src/commerce_payments/service.py",
+    "src/commerce_payments/runtime.py",
+    "config/local.json",
+    "config/development.json"
+  ]
+}
