@@ -31,7 +31,7 @@ This service has no subscriptions; `--worker` is rejected.
 |---|---|---|---|
 | `payment-provider-api` | `http://127.0.0.1:9000/charges` | `http://payment-provider-api:9000/charges` | 5 s |
 
-`HTTPClient.post` looks up the configured target, requires the code-supplied path to appear in `endpoints`, and constructs scheme/host/port/path. Changing a configured path alone is insufficient if the call site still uses the old path. No retries, authorization header, connection pool, or inbound correlation propagation are implemented. URL redirects follow urllib defaults. HTTPS for an outbound dependency uses the Python default certificate trust; no custom HTTP TLS credentials are configured.
+`HTTPClient.post` looks up the configured target, requires the code-supplied path to appear in `endpoints`, and constructs scheme/host/port/path. Changing a configured path alone is insufficient if the call site still uses the old path. No retries, connection pool, or inbound correlation propagation are implemented. Authorization uses the configured shared service or provider token when present. URL redirects follow urllib defaults. HTTPS for an outbound dependency uses the Python default certificate trust; no custom HTTP TLS credentials are configured.
 
 ## Database
 
@@ -52,7 +52,7 @@ Connection timeout defaults to 5 seconds (`connect_timeout_seconds` can override
 
 ## Security contract
 
-HTTP authentication and authorization are **not implemented**. The OpenAPI document uses `security: []` and defines no security schemes. There is no JWT, OAuth2, Basic authentication, API-key validation, role check, rate limit, or automatic 401/403 response. The listener serves plain HTTP; HTTPS requires an external proxy. CORS/OPTIONS support is absent. Payment tokens are business payload fields, not API authentication credentials.
+The HTTP API accepts a shared bearer token from `COMMERCE_API_TOKEN`. Set the variable to require `Authorization: Bearer <token>` on every application route; `/health` stays unauthenticated for liveness. Non-local environments and non-loopback listeners refuse startup when the token is missing. Local loopback mode may run without a token. This is authentication only: there are no per-service identities, authorization scopes, rate limits, or built-in HTTPS; terminate TLS at a trusted proxy. CORS/OPTIONS support is absent. Payment tokens are business payload fields, not API authentication credentials.
 
 ActiveMQ uses STOMP login/passcode read from `ACTIVEMQ_USERNAME` and `ACTIVEMQ_PASSWORD`; missing variables become empty strings, and broker policy decides whether login succeeds. Config defaults to `tls: false`; when enabled, `ca_certs` supplies broker CA verification. There is no implemented client-certificate/mTLS configuration. Do not confuse broker credentials with HTTP security.
 

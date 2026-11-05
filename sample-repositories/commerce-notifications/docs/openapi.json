@@ -15,7 +15,11 @@
       "description": "Configured development hostname; dummy DNS, not a verified deployment."
     }
   ],
-  "security": [],
+  "security": [
+    {
+      "CommerceBearer": []
+    }
+  ],
   "paths": {
     "/health": {
       "get": {
@@ -50,7 +54,8 @@
           {
             "$ref": "#/components/parameters/RequestId"
           }
-        ]
+        ],
+        "security": []
       }
     },
     "/notifications/{id}": {
@@ -116,8 +121,16 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token when authentication is enabled"
           }
-        }
+        },
+        "security": [
+          {
+            "CommerceBearer": []
+          }
+        ]
       }
     }
   },
@@ -214,6 +227,13 @@
         "schema": {
           "type": "string"
         }
+      }
+    },
+    "securitySchemes": {
+      "CommerceBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "opaque shared service token"
       }
     }
   },

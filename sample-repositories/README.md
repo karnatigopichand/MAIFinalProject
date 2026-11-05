@@ -17,15 +17,15 @@ All six serve `GET /health` (liveness only). Paths use identifiers without embed
 
 Every repository contains `config/local.json` and `config/development.json`. Local uses `127.0.0.1` with different ports. Development uses API names as dummy DNS hostnames: `commerce-orders`, `commerce-inventory`, and so on. Supply DNS/container aliases or replace the hostname with an actual external deployment. Endpoints, scheme, port, and timeout are explicit per dependency. Config files are JSON to keep configuration parsing dependency-free.
 
-`COMMERCE_CONFIG` or `--config` selects a file. Database file paths are relative to the process working directory; start each process from its repository root. API and worker for the same service must use the same database file. Do not expose this unauthenticated demo on a public network.
+`COMMERCE_CONFIG` or `--config` selects a file. Database file paths are relative to the process working directory; start each process from its repository root. API and worker for the same service must use the same database file. In local loopback mode, service APIs can run without a token. Set `COMMERCE_API_TOKEN` to require bearer authentication; non-local environments and non-loopback binds require this token at startup. `/health` remains open for liveness. Service clients forward the shared token. Set `PAYMENT_PROVIDER_API_TOKEN` or `CARRIER_PROVIDER_API_TOKEN` to protect the corresponding mock provider. Do not expose the demo directly on a public network.
 
-External prerequisites:
+## Local broker and provider APIs
 
-- ActiveMQ Classic with STOMP enabled on port 61613. Development hostname: `activemq`.
-- `payment-provider-api:9000` implements `POST /charges`: request `amount`, `currency`, `token`; response `status` (`authorized` or `declined`) and `authorization_id` on success.
-- `carrier-provider-api:9001` implements `POST /shipments`: request `reference`, `address`; response `tracking_number`.
+Start the local ActiveMQ Classic broker (STOMP on 61613) with `docker compose up -d activemq`. For this local demo, set `ACTIVEMQ_USERNAME=demo` and `ACTIVEMQ_PASSWORD=demo` in the shells running orders, shipping, and notifications. The broker's web console is available at http://127.0.0.1:8161.
 
-These provider URLs are placeholders for actual external APIs, not included simulators. Replace hosts/endpoints and adapt mappings to your real provider contract. There is no runtime fallback to stubs. Full fulfillment requires the broker and both external providers.
+Start deterministic local payment and carrier API implementations with `python3 scripts/mock_providers.py` from the workspace root. They listen on 127.0.0.1:9000 and :9001 as configured in `config/local.json`. `POST /charges` accepts `amount`, `currency`, and `token`; token `demo-decline` returns a decline, and other valid demo tokens return a stable authorization ID. `POST /shipments` accepts `reference` and `address` and returns a stable demo tracking number. These are synthetic demo implementations; they never charge a card or book a real shipment. Development configuration still points to separately supplied provider services at `payment-provider-api` and `carrier-provider-api`.
+
+For a full local run, start these dependencies, then run the six APIs and the shipping and notifications workers as described below. There is no fallback when a dependency is unavailable.
 
 ## Run APIs and workers
 
@@ -34,8 +34,8 @@ For each repository, in its own terminal:
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -e .
-export ACTIVEMQ_USERNAME=your-user
-export ACTIVEMQ_PASSWORD=your-password
+export ACTIVEMQ_USERNAME=demo
+export ACTIVEMQ_PASSWORD=demo
 .venv/bin/python -m commerce_orders.app --config config/local.json
 ```
 
@@ -90,11 +90,11 @@ ACTIVEMQ_TEST_HOST=127.0.0.1 .venv/bin/python -m unittest discover -s tests -p t
 
 Run that command from the workspace using an environment containing `stomp.py`. The live check uses the named `commerce.integration.shipping` and `commerce.integration.notifications` queues, which may remain on the broker afterward.
 
-Each service has seven implementation-reviewed guides, an OpenAPI 3.1 specification, reviewed source hashes, and multiple authored debt documents. The old summary generator has been removed. Documentation is maintained alongside code; the validator checks source freshness, routes, configured servers, and references without overwriting prose. Pinecone/Neo4j ingestion and AI agents remain separate workstreams.
+Each service has seven implementation-reviewed guides, an OpenAPI 3.1 specification, reviewed source hashes, and multiple authored debt documents. The old summary generator has been removed. Documentation is maintained alongside code; the validator checks source freshness, routes, configured servers, and references without overwriting prose. The workspace-level impact workflow is described in the root README; Pinecone/Neo4j ingestion remains a separate integration step.
 
 ## Reliability boundaries
 
-Sequential API execution, no authentication, no inventory compensation after failed payment, no concurrent reservation isolation, no idempotency conflict detection, and no atomic database/broker transaction. Orders/shipping retry unfinished publication on a later request/event delivery; no background dispatcher exists. Partial fan-out or a crash before recording publication may duplicate messages. Successful sequential consumer redelivery is deduplicated. Health endpoints do not verify dependencies. These are demo services, not production-ready commerce infrastructure.
+Sequential API execution, shared-token authentication only (no per-service identity or route authorization), no inventory compensation after failed payment, no concurrent reservation isolation, no idempotency conflict detection, and no atomic database/broker transaction. Orders/shipping retry unfinished publication on a later request/event delivery; no background dispatcher exists. Partial fan-out or a crash before recording publication may duplicate messages. Successful sequential consumer redelivery is deduplicated. Health endpoints do not verify dependencies. These are demo services, not production-ready commerce infrastructure.
 
 ## Protocol references
 
@@ -111,6 +111,6 @@ Queue destinations and persistent STOMP sends follow the [ActiveMQ Classic STOMP
 | Shipping | [API contract](commerce-shipping/docs/api-contracts.md) | [OpenAPI](commerce-shipping/docs/openapi.json) |
 | Notifications | [API contract](commerce-notifications/docs/api-contracts.md) | [OpenAPI](commerce-notifications/docs/openapi.json) |
 
-OpenAPI describes supported client payloads, not runtime schema enforcement. Security is explicitly empty because HTTP authentication is absent. Documented development URLs are configured hostnames, not confirmed deployed endpoints.
+OpenAPI describes supported client payloads, not runtime schema enforcement. OpenAPI documents the shared bearer token on business routes and leaves `/health` public. Local loopback can run without the token; non-local or exposed listeners require it. Documented development URLs are configured hostnames, not confirmed deployed endpoints.
 
 For full OpenAPI structure and request/response example validation, use a development environment with `pip install -r scripts/requirements-docs.txt`, then run `python3 scripts/validate_sample_docs.py --openapi`. This dependency is documentation tooling, not a service runtime requirement.

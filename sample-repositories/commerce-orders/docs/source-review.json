@@ -1,14 +1,14 @@
 {
-  "review_date": "2026-10-24",
+  "review_date": "2026-11-05",
   "repository": "commerce-orders",
-  "method": "Implementation-reviewed API and behavior documentation; hashes detect later source drift.",
+  "method": "Implementation-reviewed API and behavior documentation; source hashes refreshed after bearer-token boundary update.",
   "files": {
     "config/development.json": "c436be2760653fb1d7d715403f0f74b06e28c6cd4901e87b67632e7b5f62e2b6",
     "config/local.json": "d63aa3f947e01fe46ebdcb7be190593ee3149d0b0a4387b94c33a4b8c5ec7bdb",
     "contracts.json": "86622d5f0d97624c7e0d0c1afab7e4358bea7f4652ee012062d5545cf02615f7",
     "src/commerce_orders/__init__.py": "bd993736e3703534c868b54fa36af989893d33eef237562d6a22440f40c15cf6",
-    "src/commerce_orders/app.py": "514c407027add0ff798665fad425e29afe2858803c07cfbc4e5211f17118440a",
-    "src/commerce_orders/runtime.py": "6add01b5081ad2d3fd949f1a211b5345bf6e8a9e5c5397d14ce8d01a63977167",
+    "src/commerce_orders/app.py": "1121d31e8c9f549f72ffffa360cbef0d90467ac017367f19152c00f55c601a21",
+    "src/commerce_orders/runtime.py": "072011e8d21a1e381bf45e80a5163aeb320f28f84aaf5f6d53cff1b5839df367",
     "src/commerce_orders/service.py": "19781690bd6fd9a09f234c12cb68fccd04b62f71673a8320374d3e1ca21875ad"
   }
 }

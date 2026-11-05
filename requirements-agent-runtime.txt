@@ -1,0 +1,7 @@
+# Optional hosted/standardized agent runtime. Core local replay has no third-party dependencies.
+langgraph>=1.0,<2
+mcp>=2.0.0,<3
+# Optional hosted evidence pipeline and deterministic Graphify extraction.
+pinecone>=7.0,<9
+neo4j>=5.0,<7
+graphifyy>=0.9.100,<1

@@ -13,8 +13,10 @@ def validate(strict=False):
         spec=json.loads((repo/'docs/openapi.json').read_text())
         review=json.loads((repo/'docs/source-review.json').read_text())
         assert spec['openapi']=='3.1.0'
-        assert spec['security']==[],f'{repo.name}: documented authentication differs from implementation'
-        assert not spec['components'].get('securitySchemes')
+        assert spec['security']==[{'CommerceBearer':[]}],f'{repo.name}: global bearer security is missing'
+        assert spec['components']['securitySchemes']['CommerceBearer']=={
+            'type':'http','scheme':'bearer','bearerFormat':'opaque shared service token'
+        }
         for relative,digest in review['files'].items():
             assert hashlib.sha256((repo/relative).read_bytes()).hexdigest()==digest,f'{repo.name}/{relative}: changed since documentation review; review docs and refresh reviewed hash'
         config=json.loads((repo/'config/local.json').read_text())
@@ -29,6 +31,13 @@ def validate(strict=False):
             expected.add((path,'post'))
         actual={(path,method) for path,operations in spec['paths'].items() for method in operations}
         assert actual==expected,(repo,actual,expected)
+        for path,operations in spec['paths'].items():
+            for method,operation in operations.items():
+                if path=='/health' and method=='get':
+                    assert operation.get('security')==[],f'{repo.name}: health should remain public'
+                else:
+                    assert operation.get('security')==[{'CommerceBearer':[]}],f'{repo.name}: {method} {path} must require bearer auth'
+                    assert '401' in operation['responses'],f'{repo.name}: {method} {path} must document unauthorized response'
         def walk(value):
             if isinstance(value,dict):
                 if '$ref' in value:

@@ -10,7 +10,7 @@ Six repositories are retained from the overall plan: checkout, orders, inventory
 
 The initial implementation is in `sample-repositories/`. Each directory contains an independent Python package, unit tests, machine-readable contracts, implementation-reviewed docs, OpenAPI specifications, and four authored technical-debt documents. Workspace scripts call the running APIs, run tests, and validate reviewed documentation. Separate Git repositories and remotes have not been created.
 
-The current iteration implements real HTTP JSON clients and HTTP servers, plus ActiveMQ Classic STOMP publishers and workers. Environment-specific JSON files define external API hosts, ports, endpoints, and queue bindings. Production code has no stub fallback; tests inject isolated doubles. SQLite uses one generic `records` table per service database with named logical record kinds; it does not implement the separate physical tables suggested in the initial plan. API servers are runnable now. A reachable broker and external provider APIs are required for the full deployed flow; broker deployment and database migrations are not bundled.
+The current iteration implements real HTTP JSON clients and HTTP servers, plus ActiveMQ Classic STOMP publishers and workers. Environment-specific JSON files define external API hosts, ports, endpoints, and queue bindings. Production service code has no stub fallback; tests inject isolated doubles. A workspace-level deterministic payment and carrier demo API is available in `scripts/mock_providers.py`, and `docker-compose.yml` provisions a local ActiveMQ Classic broker. SQLite uses one generic `records` table per service database with named logical record kinds; it does not implement the separate physical tables suggested in the initial plan. API servers are runnable now. SQLite/broker/provider persistence is demo-grade.
 
 ## Repository implementation breakdown
 
@@ -62,11 +62,11 @@ Review source hashes are stored in each `docs/source-review.json`. Refresh them 
 2. Assign one target directory per teammate or pair; ownership is independent of agent ownership.
 3. Extract each directory into its own Git repository when authorized; preserve package layout and add a local documentation-review/validation workflow.
 4. Record repository URLs and immutable commits in the AI-system manifest.
-5. Connect the existing documentation corpus to the planned Pinecone/Neo4j indexing tools.
-6. Start each API and shipping/notifications workers using the service guide; verify real provider and broker connectivity. Connect the three agents, trace UI, and Jira workflow separately.
+5. Connect the existing documentation corpus to the planned Pinecone/Neo4j indexing tools; the local evidence snapshot/MCP tools currently provide the replay path.
+6. Start each API and shipping/notifications workers using the service guide; verify real provider and broker connectivity. Configure Jira and hosted delivery separately.
 7. Check Replit runtime/storage/network behavior early; retain local replay.
 
-Do not infer that generating this application implements the AI agents, MCP, Jira, Pinecone, Neo4j, or deployment. Those remain separate workstreams in the overall plan.
+The application corpus alone does not implement the AI workflow. A separate local evidence-backed three-agent vertical slice, optional LangGraph/MCP adapters, and Jira integration are now in the workspace root; Pinecone, Neo4j, model-backed reasoning, and deployment remain integration work.
 
 ## Acceptance criteria
 
@@ -76,4 +76,4 @@ Do not infer that generating this application implements the AI agents, MCP, Jir
 - Tests pass before documentation review.
 - Each target has multiple debt documents with source/test references and labeled estimates.
 - Reviewed docs accurately describe real network transport, configured queues, JSON logs, actual storage, provenance, and limitations.
-- Tests require no external provider credentials. Full runtime requires configured external provider APIs and ActiveMQ credentials; these must not be committed.
+- Tests require no external provider credentials. The local provider APIs and broker use synthetic demo behavior/credentials; replace them with secured external dependencies for deployment.

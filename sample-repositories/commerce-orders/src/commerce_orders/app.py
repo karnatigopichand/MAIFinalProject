@@ -4,9 +4,9 @@ import json
 import os
 import signal
 import threading
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
-from .runtime import Database, HTTPClient, ActiveMQEvents, DownstreamError, load_config, log, broker_connection, connect, configure_logging
+from .runtime import Database, HTTPClient, ActiveMQEvents, DownstreamError, load_config, log, broker_connection, connect, configure_logging, request_authorized, validate_server_binding
 from .service import Service
 
 
@@ -28,6 +28,8 @@ def make_handler(config, service_factory=make_service):
             path=urlparse(self.path).path
             if path=='/health':
                 self.respond(200,{'service':config['service'],'status':'up','dependency_check':False}); return
+            if not request_authorized(self):
+                self.respond(401,{'error':'unauthorized'}); return
             route=config['api']['read_path']+'/'
             if not path.startswith(route) or not path[len(route):]:
                 self.respond(404,{'error':'not_found'}); return
@@ -38,6 +40,8 @@ def make_handler(config, service_factory=make_service):
             finally: service.db.close()
         def do_POST(self):
             path=urlparse(self.path).path
+            if not request_authorized(self):
+                self.respond(401,{'error':'unauthorized'}); return
             method=config['api']['write_routes'].get(path)
             if not method:
                 self.respond(404,{'error':'not_found'}); return
@@ -114,7 +118,8 @@ def main():
         if not config['mq']['consume']: parser.error('This service has no queue subscriptions')
         run_worker(config)
     else:
-        server=HTTPServer((config['server']['host'],config['server']['port']),make_handler(config))
+        validate_server_binding(config)
+        server=ThreadingHTTPServer((config['server']['host'],config['server']['port']),make_handler(config))
         log(config['service'],'server.started',port=config['server']['port'])
         try: server.serve_forever()
         except KeyboardInterrupt: pass

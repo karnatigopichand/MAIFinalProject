@@ -1,0 +1,11 @@
+services:
+  activemq:
+    # ActiveMQ Classic image with the STOMP connector enabled on 61613.
+    image: rmohr/activemq:5.15.9
+    ports:
+      - "127.0.0.1:61613:61613"
+      - "127.0.0.1:8161:8161"
+    environment:
+      ACTIVEMQ_ADMIN_LOGIN: demo
+      ACTIVEMQ_ADMIN_PASSWORD: demo
+    restart: unless-stopped

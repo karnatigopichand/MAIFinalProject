@@ -8,6 +8,10 @@ The system returns a report; it does not implement changes. Autonomy means that 
 
 Completion target: November 6–7, 2026. Demo day: November 10, 2026.
 
+## Current workspace status
+
+The six-service corpus is present under `sample-repositories/`. A local evidence-backed three-agent workflow now lives in the workspace root as `impact_assessment/`, with deterministic snapshot retrieval, config-derived API/event edges, debt gating, evidence verification, trace/report persistence, optional LangGraph/MCP adapters, and an authenticated Jira intake/comment adapter. The hosted Pinecone/Neo4j stores, model-backed reasoning, live Jira account, and deployment are not configured. See [agent architecture and local implementation](agent-architecture-and-mvp.md) for the implemented boundary and integration order.
+
 ## Agreed scope
 
 - E-commerce sample application with six small, related repositories generated with Codex.

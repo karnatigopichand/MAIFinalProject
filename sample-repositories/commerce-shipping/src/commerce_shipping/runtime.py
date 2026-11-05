@@ -1,5 +1,7 @@
 """Network adapters: configured HTTP, ActiveMQ STOMP, SQLite, JSON logs."""
 import json
+import hmac
+import ipaddress
 import logging
 import os
 import sqlite3
@@ -50,6 +52,30 @@ class DownstreamError(Exception):
         self.status = status
 
 
+def api_token():
+    return os.environ.get('COMMERCE_API_TOKEN', '')
+
+
+def request_authorized(handler):
+    token = api_token()
+    if not token:
+        return True
+    supplied = handler.headers.get('Authorization', '')
+    candidate = supplied[7:] if supplied.startswith('Bearer ') else ''
+    return hmac.compare_digest(candidate, token)
+
+
+def validate_server_binding(config):
+    host = config['server']['host']
+    try:
+        exposed = not ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        exposed = host not in {'localhost'}
+    required = config.get('environment', 'local') != 'local' or exposed
+    if required and not api_token():
+        raise RuntimeError('COMMERCE_API_TOKEN is required outside loopback local mode')
+
+
 class HTTPClient:
     def __init__(self, config):
         self.config = config
@@ -58,8 +84,15 @@ class HTTPClient:
         if path not in endpoint['endpoints'].values():
             raise ValueError('Unconfigured endpoint')
         url = f"{endpoint['scheme']}://{endpoint['host']}:{endpoint['port']}{path}"
-        req = request.Request(url, data=json.dumps(payload).encode(), headers={
-            'Content-Type':'application/json', 'X-Request-ID':str(uuid.uuid4())}, method='POST')
+        headers = {'Content-Type':'application/json', 'X-Request-ID':str(uuid.uuid4())}
+        if target in {'payment-provider-api', 'carrier-provider-api'}:
+            token_name = target.replace('-', '_').upper() + '_TOKEN'
+            token = os.environ.get(token_name, '')
+        else:
+            token = api_token()
+        if token:
+            headers['Authorization'] = f'Bearer {token}'
+        req = request.Request(url, data=json.dumps(payload).encode(), headers=headers, method='POST')
         start = time.monotonic()
         try:
             with request.urlopen(req, timeout=endpoint.get('timeout_seconds',5)) as response:

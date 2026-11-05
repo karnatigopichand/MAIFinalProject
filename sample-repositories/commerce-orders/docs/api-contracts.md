@@ -13,7 +13,7 @@ Reviewed against [create_order](../src/commerce_orders/service.py), [HTTP handle
 
 ## Security contract
 
-HTTP authentication and authorization are **not implemented**. The OpenAPI document uses `security: []` and defines no security schemes. There is no JWT, OAuth2, Basic authentication, API-key validation, role check, rate limit, or automatic 401/403 response. The listener serves plain HTTP; HTTPS requires an external proxy. CORS/OPTIONS support is absent. Payment tokens are business payload fields, not API authentication credentials.
+The HTTP API accepts a shared bearer token from `COMMERCE_API_TOKEN`. Set the variable to require `Authorization: Bearer <token>` on every application route; `/health` stays unauthenticated for liveness. Non-local environments and non-loopback listeners refuse startup when the token is missing. Local loopback mode may run without a token. This is authentication only: there are no per-service identities, authorization scopes, rate limits, or built-in HTTPS; terminate TLS at a trusted proxy. CORS/OPTIONS support is absent. Payment tokens are business payload fields, not API authentication credentials.
 
 ActiveMQ uses STOMP login/passcode read from `ACTIVEMQ_USERNAME` and `ACTIVEMQ_PASSWORD`; missing variables become empty strings, and broker policy decides whether login succeeds. Config defaults to `tls: false`; when enabled, `ca_certs` supplies broker CA verification. There is no implemented client-certificate/mTLS configuration. Do not confuse broker credentials with HTTP security.
 
@@ -24,11 +24,11 @@ ActiveMQ uses STOMP login/passcode read from `ACTIVEMQ_USERNAME` and `ACTIVEMQ_P
 | `Content-Type` | Send `application/json` for POST. The handler parses JSON regardless of this header and does not return 415 for another value. | Application GET/POST responses use `application/json`. |
 | `Content-Length` | POST requires declared length from 1 through 1,048,576 bytes. Most HTTP clients calculate it. Chunked bodies are not supported. GET does not inspect a body. | Set to the encoded JSON byte length. |
 | `Accept` | Optional and ignored; no content negotiation. | No negotiated representation. |
-| `Authorization`, API-key headers, cookies | Not checked; do not confer authentication. | No token/cookie issued. |
+| `Authorization` | Optional in local loopback mode; when `COMMERCE_API_TOKEN` is set, application routes require a constant-time checked bearer token. | No token issued. `/health` remains public. |
 | `X-Request-ID` | Accepted as an arbitrary header but not read, propagated, or echoed. | Not returned. |
 | Other headers | No application-specific processing. | Python HTTP server also adds `Server` and `Date`; no CORS headers. |
 
-Each outbound HTTP call sends `Content-Type: application/json` and a newly generated `X-Request-ID`. It does not forward inbound authorization, cookies, or request IDs. Provider credentials are not configured by HTTPClient.
+Each outbound HTTP call sends `Content-Type: application/json` and a newly generated `X-Request-ID`. When configured, service calls forward `COMMERCE_API_TOKEN`; provider calls use `PAYMENT_PROVIDER_API_TOKEN` or `CARRIER_PROVIDER_API_TOKEN`. Inbound user tokens and cookies are not forwarded.
 
 ## GET `/health`
 

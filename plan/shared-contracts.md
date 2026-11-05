@@ -2,7 +2,7 @@
 
 ## Development agreement
 
-Define these contracts before implementing agent prompts. Use Pydantic models in a shared package; examples below describe fields rather than prescribing executable code. Version contracts and validate at every agent boundary.
+Use the versioned contracts in `impact_assessment/models.py` as the executable local baseline. They currently use standard-library dataclasses so local replay has no extra dependency. Add Pydantic validation at persisted and hosted agent boundaries before enabling external model/tool calls. Version contracts and validate at every agent boundary.
 
 ## Core artifacts
 

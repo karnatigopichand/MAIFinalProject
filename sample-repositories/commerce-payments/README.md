@@ -30,7 +30,7 @@ The API exposes `/health` and a resource GET endpoint; write routes, port, and q
 
 ## Dependencies and limits
 
-ActiveMQ Classic must expose STOMP on port 61613. Payment/carrier provider APIs are separate real HTTP targets; their documented payload contracts must be fulfilled by your environment. No provider simulator is included at runtime. API health is liveness, not dependency readiness. Server is sequential and has no authentication: use a controlled demo network.
+For local ActiveMQ and deterministic payment/carrier demo APIs, see the workspace [service guide](../README.md). These demo dependencies use synthetic behavior and do not charge cards or book shipments. API health is liveness, not dependency readiness. Server processes requests concurrently and supports an optional shared bearer token; non-local or non-loopback deployment requires `COMMERCE_API_TOKEN`. `/health` is public liveness only. Use TLS termination and a controlled demo network.
 
 SQLite and broker publication are not one transaction. Pending order/shipment publication retries on request/event redelivery; there is no background outbox dispatcher. Partial queue fan-out can redeliver duplicates; consumers deduplicate sequential deliveries. Inventory is not compensated after payment failure. See `docs/data-model.md` and technical debt.
 

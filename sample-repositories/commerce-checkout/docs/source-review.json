@@ -1,14 +1,14 @@
 {
-  "review_date": "2026-10-24",
+  "review_date": "2026-11-05",
   "repository": "commerce-checkout",
-  "method": "Implementation-reviewed API and behavior documentation; hashes detect later source drift.",
+  "method": "Implementation-reviewed API and behavior documentation; source hashes refreshed after bearer-token boundary update.",
   "files": {
     "config/development.json": "bd92544cf1c3a31a871e2ca9b38d1c3cadb53a91e389a2ea46866385bd25c6b2",
     "config/local.json": "25c8ab33fa4ddbc8d107eef61ceeac376b1c1b7dc2340b7ca5089dd73b290949",
     "contracts.json": "07f97a17a72ead296a473bfae24aceea7762dfe11619ba72cac6e85094a59f0f",
     "src/commerce_checkout/__init__.py": "bd993736e3703534c868b54fa36af989893d33eef237562d6a22440f40c15cf6",
-    "src/commerce_checkout/app.py": "514c407027add0ff798665fad425e29afe2858803c07cfbc4e5211f17118440a",
-    "src/commerce_checkout/runtime.py": "6add01b5081ad2d3fd949f1a211b5345bf6e8a9e5c5397d14ce8d01a63977167",
+    "src/commerce_checkout/app.py": "1121d31e8c9f549f72ffffa360cbef0d90467ac017367f19152c00f55c601a21",
+    "src/commerce_checkout/runtime.py": "072011e8d21a1e381bf45e80a5163aeb320f28f84aaf5f6d53cff1b5839df367",
     "src/commerce_checkout/service.py": "a2527ce685708bf4d9f50a9344c33d3ca7a9fd00fcb6814789f68108502a5851"
   }
 }

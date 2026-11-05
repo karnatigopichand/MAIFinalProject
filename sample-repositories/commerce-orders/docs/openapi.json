@@ -15,7 +15,11 @@
       "description": "Configured development hostname; dummy DNS, not a verified deployment."
     }
   ],
-  "security": [],
+  "security": [
+    {
+      "CommerceBearer": []
+    }
+  ],
   "paths": {
     "/health": {
       "get": {
@@ -50,7 +54,8 @@
           {
             "$ref": "#/components/parameters/RequestId"
           }
-        ]
+        ],
+        "security": []
       }
     },
     "/orders/{id}": {
@@ -116,8 +121,16 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token when authentication is enabled"
           }
-        }
+        },
+        "security": [
+          {
+            "CommerceBearer": []
+          }
+        ]
       }
     },
     "/orders": {
@@ -147,7 +160,7 @@
               }
             }
           },
-          "description": "JSON object; Content-Length must be 1\u20131048576 bytes. Content-Type application/json is recommended but not enforced. Chunked transfer is unsupported."
+          "description": "JSON object; Content-Length must be 1–1048576 bytes. Content-Type application/json is recommended but not enforced. Chunked transfer is unsupported."
         },
         "responses": {
           "200": {
@@ -265,11 +278,19 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token when authentication is enabled"
           }
         },
         "parameters": [
           {
             "$ref": "#/components/parameters/RequestId"
+          }
+        ],
+        "security": [
+          {
+            "CommerceBearer": []
           }
         ]
       }
@@ -432,6 +453,13 @@
         "schema": {
           "type": "string"
         }
+      }
+    },
+    "securitySchemes": {
+      "CommerceBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "opaque shared service token"
       }
     }
   },
