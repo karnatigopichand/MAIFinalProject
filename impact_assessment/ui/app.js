@@ -1,30 +1,689 @@
-const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
-const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const toast=(message)=>{const el=$('#toast');el.textContent=message;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),3200)};
-$('#status-summary').setAttribute('role','status');$('#status-summary').setAttribute('aria-live','polite');$('#jira-search-note').setAttribute('role','status');$('#jira-search-note').setAttribute('aria-live','polite');
-$$('.button b,.preset-button span,.live-dot').forEach(el=>el.setAttribute('aria-hidden','true'));
-let accessToken=sessionStorage.getItem('impactAtlasToken')||'';
-async function api(path,body){const headers={};if(accessToken)headers.Authorization=`Bearer ${accessToken}`;if(body)headers['Content-Type']='application/json';let r;try{r=await fetch(path,body?{method:'POST',headers,body:JSON.stringify(body)}:{headers})}catch(_){throw Error(`Can't reach the demo API from ${location.origin}. Open the UI at the server's URL and confirm the server is running.`)}let data;try{data=await r.json()}catch(_){throw Error(`The demo API at ${location.origin} returned an unreadable response (HTTP ${r.status}).`)}if(!r.ok)throw Error(data.detail||data.error||`HTTP ${r.status}`);return data}
-$$('.tab').forEach(b=>b.addEventListener('click',()=>{$$('.tab').forEach(x=>x.classList.toggle('active',x===b));$$('.panel').forEach(x=>x.classList.toggle('active',x.id===`${b.dataset.tab}-panel`))}));
-api('/api/config').then(c=>{if(c.auth_required&&!accessToken)$('#auth-dialog').showModal();const note=$('#jira-config-note');if(note)note.textContent=c.jira_configured?'Jira credentials are configured on the app server.':'Set IMPACT_JIRA_BASE_URL, IMPACT_JIRA_EMAIL, and IMPACT_JIRA_API_TOKEN on the app server.'}).catch(()=>{});$('#auth-form').addEventListener('submit',e=>{e.preventDefault();accessToken=new FormData(e.currentTarget).get('token');sessionStorage.setItem('impactAtlasToken',accessToken);$('#auth-dialog').close();refreshStatus();toast('Demo session connected.')});
-const nice=s=>s.replace(/^commerce-/,'').replace(/-/g,' ');
-async function refreshStatus(){try{const d=await api('/api/status');const entries=[...d.services.map(s=>({name:nice(s.name),status:['ok','up'].includes(s.status)?'ok':'down'})),{name:'activemq broker',status:d.broker==='reachable'?'ok':'down'}];$('#services').innerHTML=entries.map(x=>`<div class="service ${x.status}" aria-label="${esc(x.name)}: ${x.status==='ok'?'Available':'Unavailable'}"><i aria-hidden="true"></i><span>${esc(x.name)}</span><span class="service-state">${x.status==='ok'?'Available':'Unavailable'}</span></div>`).join('');const healthy=entries.filter(x=>x.status==='ok').length;$('#status-summary').textContent=`${healthy} / ${entries.length} dependencies available`;$('#status-summary').title=d.note}catch(e){$('#status-summary').textContent='Status unavailable'}}
-refreshStatus();setInterval(refreshStatus,10000);
-function showAssessment(a){const evidence=new Map((a.evidence||[]).map(x=>[x.evidence_id,x]));const ids=arr=>(arr||[]).map(id=>{const e=evidence.get(id);return e?`<code>${esc(e.repository)}/${esc(e.path)}:${e.line_start}-${e.line_end}</code>`:`<code>${esc(id)}</code>`}).join(' · ');
-const impact=(a.impacts||[]).map(x=>`<div class="finding"><span class="badge">${esc(x.classification)}</span><b>${esc(x.repository)} · ${esc(x.component)}</b><p>${esc(x.claim)} ${esc(x.business_relevance)}</p>${ids(x.evidence_ids)}</div>`).join('')||'<p class="muted">No direct impacts returned.</p>';
-const risks=(a.risks||[]).map(x=>`<div class="risk-item"><span class="badge ${/high|critical/i.test(x.severity)?'warn':''}">${esc(x.severity)} risk</span><b>${esc(x.failure_mode)}</b><p>${esc(x.business_consequence)} · Validate: ${esc((x.recommended_validation||[]).join('; '))}</p>${ids(x.evidence_ids)}</div>`).join('')||'<p class="muted">No risks returned.</p>';
-const c=a.classification;const classificationPeek=c?`<div class="classification-peek"><span class="classification-chip"><small>SCOPE</small>${esc((c.impact_scope?.label||'unclear').replaceAll('_',' '))}</span><span class="classification-chip"><small>CHANGE</small>${esc((c.change_kind?.label||'mixed_or_unclear').replaceAll('_',' '))}</span><span class="classification-chip"><small>CLARITY</small>${esc(c.clarity?.label||'unknown')}</span>${c.review_recommended?'<span class="classification-chip review-chip">Review suggested</span>':''}</div>`:`<div class="classification-peek"><span class="classification-chip muted">Classification ${esc(a.classification_status||'not configured')}</span></div>`;const classification=c?`<div class="classification-detail"><span><b>${esc(c.provider||'classifier')}</b></span><span>Scope confidence ${esc(c.impact_scope?.confidence??'n/a')}</span><span>Change confidence ${esc(c.change_kind?.confidence??'n/a')}</span><span>Clarification probability ${esc(c.requires_clarification_probability??'n/a')}</span><span>${c.review_recommended?'Human review suggested':'No review flag'}</span></div>`:`<p class="muted">Configure OPENAI_API_KEY or JEV_API_KEY on the app server.</p>`;
-const codeRecs=(a.code_recommendations||[]).map(x=>`<div class="recommendation-item"><b>${esc(x.repository)} · ${esc(x.title)}</b><p>${esc(x.recommendation)}</p><p class="muted">Why it fits: ${esc(x.rationale)}</p><p>Local evidence: ${ids(x.evidence_ids)}</p>${x.code_example?`<pre><code>${esc(x.code_example)}</code></pre>`:''}<div class="recommendation-sources">${(x.sources||[]).map(s=>`<a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${esc(s.title)} ↗</a>`).join('')}</div></div>`).join('');
-const recTrace=(a.trace||[]).find(t=>t.agent==='code-recommendation-engine'),recParams=recTrace?.parameters||{},noCitationMessage=recParams.source_count?`Web search found ${recParams.source_count} approved source(s), but no recommendation passed repository-evidence and citation checks. See the investigation trace for proposal and retry details.`:'Web search found no approved source pages for this run. See the investigation trace; the impact assessment is still available.';const codeRecSection=codeRecs||`<p class="muted">${esc(({not_configured:'Set OPENAI_API_KEY to enable cited web recommendations.',disabled:'Web recommendations are disabled.',unavailable:'Web search was unavailable; the evidence-backed assessment is still available.',skipped_no_verified_impacts:'No verified impact was available to scope recommendations.',no_cited_recommendations:noCitationMessage})[a.code_recommendation_status]||'No web recommendations returned.')}</p>`;
-const debt=(a.debt_assessments||[]).map(x=>`<div class="debt-item"><span class="badge ${x.disposition==='consider'?'warn':''}">${esc(x.disposition)}</span><b>${esc(x.repository)} · ${esc(x.title)}</b><br>${esc(x.reason)} · ${x.total_hours==null?'effort unknown':`${esc(x.total_hours)}h incl. testing`}<br>Shared tests: ${esc((x.shared_tests||[]).join(', ')||'none identified')}</div>`).join('')||'<p class="muted">No related debt items.</p>';
-const evidenceHtml=(a.evidence||[]).slice(0,16).map(e=>`<div class="evidence-item"><b>${esc(e.repository)} · ${esc(e.section||e.document_type)}</b><p>${esc(e.excerpt)}</p><code>${esc(e.path)}:${e.line_start}-${e.line_end} · ${esc(e.commit)}</code></div>`).join('');
-const questions=(a.questions||[]).map(q=>`<li>${esc(q)}</li>`).join('');const paths=(a.dependency_paths||[]).map(p=>`<li>${esc(typeof p==='string'?p:JSON.stringify(p))}</li>`).join('');const trace=(a.trace||[]).map(t=>`<li><b>${esc(t.agent)} · ${esc(t.name)}</b> · ${esc(t.outcome)}${t.duration_ms!=null?` · ${esc(Math.round(t.duration_ms))}ms`:''}<details><summary>Inspect event</summary><pre>${esc(JSON.stringify({type:t.event_type,parameters:t.parameters,evidence_ids:t.evidence_ids,error:t.error},null,2))}</pre></details></li>`).join('');const langfuse=a.langfuse_trace_url?`<a class="trace-link" href="${esc(a.langfuse_trace_url)}" target="_blank" rel="noopener noreferrer">Open Langfuse trace ↗</a>`:`<span class="trace-state">Langfuse ${esc(a.langfuse_trace_status||'not configured').replaceAll('_',' ')} · local trace available below</span>`;
-$('#assessment-result').innerHTML=`<div class="result-head"><div><h3>Assessment response</h3><small>${esc(a.context.ticket_id)} · snapshot ${esc(a.context.snapshot_id)}</small></div><div class="result-actions">${langfuse}<button class="download" id="download-report">↓ Report</button></div></div><div class="summary-card"><div class="eyebrow">${esc(a.status.replaceAll('_',' ').toUpperCase())}</div><p>${esc(a.summary)}</p></div>${classificationPeek}<a class="full-response-link" id="toggle-full-response" href="#full-response" aria-controls="full-response" aria-expanded="false">View full response · ${a.impacts?.length||0} impacts · ${a.questions?.length||0} questions · ${a.evidence?.length||0} evidence items ↓</a><details class="assessment-response" id="full-response"><summary class="visually-hidden">Full response</summary><div class="assessment-response-body"><details class="response-row metrics-row" open><summary>Assessment metrics</summary><div class="response-row-content metrics-row-content"><div class="metric-row"><div class="metric"><b>${a.impacts?.length||0}</b><span>IMPACT FINDINGS</span></div><div class="metric"><b>${a.risks?.length||0}</b><span>RISKS</span></div><div class="metric"><b>${a.evidence?.length||0}</b><span>EVIDENCE ITEMS</span></div></div></div></details><details class="response-row classification-row" open><summary>Jira impact classification</summary><div class="response-row-content classification-row-content"><div class="result-block classification-block"><h4>Jira impact classification</h4>${classification}</div></div></details><details class="response-row analysis-row" open><summary>Clarifications · business risks · service impact</summary><div class="response-row-content"><div class="result-block clarification-block"><h4>Clarifications needed</h4>${questions?`<ul>${questions}</ul>`:`<p class="muted">No clarification questions for this assessment.</p>`}</div><div class="result-block risk-validation-block"><h4>Business risks & validation</h4>${risks}</div><div class="result-block service-impact-block"><h4>Service and component impact</h4>${impact}</div></div></details><details class="response-row recommendations-row" open><summary>Code recommendations · technical debt · dependency paths</summary><div class="response-row-content"><div class="result-block code-recommendations-block"><h4>Code recommendations · industry sources</h4>${codeRecSection}<p class="muted">Web recommendations are advisory; validate fit against the cited project evidence and team conventions.</p></div><div class="result-block debt-block"><h4>Technical debt overlap</h4>${debt}</div><div class="result-block dependency-block"><h4>Dependency paths</h4>${paths?`<ul>${paths}</ul>`:`<p class="muted">No dependency paths were confirmed.</p>`}</div></div></details><details class="response-row evidence-row" open><summary>Evidence used · ${a.evidence?.length||0} items</summary><div class="response-row-content evidence-row-content"><div class="result-block evidence-block"><h4>Evidence used (${a.evidence?.length||0})</h4>${evidenceHtml||'<p>No evidence attached.</p>'}</div></div></details><details class="response-row trace-row"><summary>Show investigation trace · ${(a.trace||[]).length} events</summary><div class="response-row-content trace-row-content"><ol class="trace-list">${trace}</ol></div></details></div></details>`;
-const fullResponseLink=$('#toggle-full-response'),fullResponse=$('#full-response'),responseCounts=`${a.impacts?.length||0} impacts · ${a.questions?.length||0} questions · ${a.evidence?.length||0} evidence items`;fullResponseLink.addEventListener('click',e=>{e.preventDefault();fullResponse.open=!fullResponse.open;const expanded=fullResponse.open;fullResponseLink.setAttribute('aria-expanded',String(expanded));fullResponseLink.textContent=`${expanded?'Hide':'View'} full response · ${responseCounts} ${expanded?'↑':'↓'}`;if(expanded)fullResponse.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'})});$('#download-report').onclick=()=>{const blob=new Blob([a.report_markdown||''],{type:'text/markdown'});const link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download=`${a.context.ticket_id}-impact-report.md`;link.click();URL.revokeObjectURL(link.href)};}
-const jiraKeyInput=$('#assessment-form').elements.ticket_id,jiraOptions=$('#jira-issue-options'),jiraSearchNote=$('#jira-search-note');let jiraSearchTimer,jiraSearchSequence=0;
-jiraKeyInput.addEventListener('input',()=>{clearTimeout(jiraSearchTimer);const query=jiraKeyInput.value.trim(),sequence=++jiraSearchSequence;if(query.length<2){jiraOptions.replaceChildren();jiraSearchNote.textContent='Type at least two characters to find sample stories.';return}jiraSearchNote.textContent='Searching sample Jira stories…';jiraSearchTimer=setTimeout(async()=>{try{const result=await api('/api/jira-search',{query});if(sequence!==jiraSearchSequence)return;jiraOptions.replaceChildren(...(result.issues||[]).map(issue=>{const option=document.createElement('option');option.value=issue.key;option.label=issue.summary;return option}));jiraSearchNote.textContent=result.issues?.length?'Choose a suggestion, then load it from Jira.':'No matching sample stories. You can still load a Jira key manually.'}catch(_){if(sequence===jiraSearchSequence)jiraSearchNote.textContent='Suggestions unavailable. You can still load a Jira key manually.'}},250)});
-let loadingJiraIssue='';async function loadJiraIssue(issueKey=jiraKeyInput.value.trim()){const f=$('#assessment-form'),button=$('#load-jira-issue'),label=$('span',button);issueKey=issueKey.trim();if(!issueKey){toast('Enter a Jira issue key first.');return}if(loadingJiraIssue===issueKey)return;loadingJiraIssue=issueKey;button.disabled=true;label.textContent='Loading Jira issue…';try{const ticket=await api('/api/jira-issue',{issue_key:issueKey});f.elements.ticket_id.value=ticket.ticket_id||issueKey;f.elements.summary.value=ticket.summary||'';f.elements.description.value=ticket.description||'';f.elements.criteria.value=(ticket.acceptance_criteria||[]).join('\n');toast(`Loaded ${ticket.ticket_id||issueKey}. Review it, then run the assessment.`)}catch(err){toast(err.message)}finally{loadingJiraIssue='';button.disabled=false;label.textContent='Load issue from Jira'}}$('#load-jira-issue').addEventListener('click',()=>loadJiraIssue());jiraKeyInput.addEventListener('change',()=>{const isSuggestion=[...jiraOptions.options].some(option=>option.value.toLowerCase()===jiraKeyInput.value.trim().toLowerCase()),f=$('#assessment-form');if(isSuggestion){loadJiraIssue();return}f.elements.summary.value='';f.elements.description.value='';f.elements.criteria.value='';jiraSearchNote.textContent='Manual issue key: enter its summary, description, and criteria, then run the assessment.'});
-$('#ambiguous-example').addEventListener('click',()=>{const f=$('#assessment-form');f.elements.ticket_id.value='DEMO-SHIPPING-AMBIGUOUS';f.elements.summary.value='Offer expedited shipping and notify the recipient';f.elements.description.value='Allow customers to expedite shipping for an order and notify the recipient. The request does not define delivery timing, eligibility, or pricing.';f.elements.criteria.value='';toast('Ambiguous example loaded. Run the assessment to see focused questions.')});
-$('#assessment-form').addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget,button=$('button[type=submit]',f);button.disabled=true;button.querySelector('span').textContent='Tracing evidence…';$('#assessment-result').innerHTML='<div class="empty-state"><div class="empty-symbol">◌</div><h3>Following the change through the codebase</h3><p>Searching repository evidence and trusted engineering standards…</p></div>';try{const fd=new FormData(f);const a=await api('/api/assess',{ticket_id:fd.get('ticket_id'),summary:fd.get('summary'),description:fd.get('description'),acceptance_criteria:fd.get('criteria').split('\n').map(x=>x.trim()).filter(Boolean)});showAssessment(a)}catch(err){$('#assessment-result').innerHTML=`<div class="empty-state"><h3>Assessment could not run</h3><p>${esc(err.message)}</p></div>`}finally{button.disabled=false;button.querySelector('span').textContent='Run impact assessment'}});
-let pollTimer;const setStep=(name,state)=>{const el=$(`[data-step="${name}"]`);if(el)el.classList.toggle('complete',state)};
-$('#commerce-form').addEventListener('submit',async e=>{e.preventDefault();clearInterval(pollTimer);$$('.step').forEach(x=>x.classList.remove('complete'));const f=e.currentTarget,b=$('button[type=submit]',f);b.disabled=true;b.querySelector('span').textContent='Sending checkout…';$('#order-detail').textContent='Submitting to checkout service…';$('.journey-head h3').textContent='Order in progress';try{const fd=new FormData(f);const response=await api('/api/commerce-order',{sku:fd.get('sku'),quantity:Number(fd.get('quantity')),total_cents:Number(fd.get('total_cents')),payment_token:fd.get('payment_token'),delivery_address:fd.get('delivery_address')});window.demoOrder=response.order_id;setStep('checkout',true);$('#order-detail').textContent=JSON.stringify(response,null,2);b.querySelector('span').textContent='Place another order';let attempts=0;pollTimer=setInterval(async()=>{attempts++;try{const state=await api(`/api/order/${encodeURIComponent(window.demoOrder)}`);if(state.shipment){setStep('payment',true);setStep('shipment',true)}if(state.order_notification||state.shipment_notification){setStep('payment',true);setStep('shipment',true);setStep('notification',true)}$('#order-detail').textContent=JSON.stringify(state,null,2);if(state.shipment||attempts>12){clearInterval(pollTimer);$('.journey-head h3').textContent=state.shipment?'Shipment and events received':'Order accepted · awaiting shipment'}}catch(_){if(attempts>12)clearInterval(pollTimer)}},1200)}catch(err){$('#order-detail').textContent=`Checkout failed: ${err.message}`;$('.journey-head h3').textContent='Checkout failed';toast(err.message)}finally{b.disabled=false;if(b.querySelector('span').textContent==='Sending checkout…')b.querySelector('span').textContent='Place demo order'}});
+const { useEffect, useRef, useState } = React;
+const h = React.createElement;
+const Fragment = React.Fragment;
+const INITIAL_TICKET = 'DEMO-DELIVERY-1';
+const INITIAL_SUMMARY = 'Pass delivery instructions from checkout to carrier and customer confirmation';
+const INITIAL_DESCRIPTION = 'Customers can add delivery instructions at checkout. Forward them to the carrier and include them in the shipment confirmation.';
+const INITIAL_CRITERIA = 'Instructions are optional and limited to 200 characters.\nInstructions are passed to the carrier when a shipment is created.\nThe shipment confirmation includes the instructions.';
+
+async function api(path, body, token = '') {
+  const headers = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+  if (body) headers['Content-Type'] = 'application/json';
+  let response;
+  try {
+    response = await fetch(path, body
+      ? { method: 'POST', headers, body: JSON.stringify(body) }
+      : { headers });
+  } catch (_) {
+    throw new Error(`Can't reach the demo API from ${location.origin}. Open the app at its server URL.`);
+  }
+  let data;
+  try {
+    data = await response.json();
+  } catch (_) {
+    throw new Error(`The demo API returned an unreadable response (HTTP ${response.status}).`);
+  }
+  if (!response.ok) throw new Error(data.detail || data.error || `HTTP ${response.status}`);
+  return data;
+}
+
+const niceName = value => String(value || '').replace(/^commerce-/, '').replace(/-/g, ' ');
+const readable = value => String(value || '').replaceAll('_', ' ');
+
+function Icon({ children, className = '' }) {
+  return h('span', { className: `icon ${className}`.trim(), 'aria-hidden': 'true' }, children);
+}
+
+function Brand() {
+  return h('a', { className: 'brand', href: '/', 'aria-label': 'Impact Atlas home' },
+    h('span', { className: 'brand-icon', 'aria-hidden': 'true' }, 'IA'),
+    h('span', null, 'Impact Atlas', h('small', null, 'CHANGE INTELLIGENCE')));
+}
+
+function App() {
+  const [tab, setTab] = useState('assessment');
+  const [accessToken, setAccessToken] = useState(() => sessionStorage.getItem('impactAtlasToken') || '');
+  const [config, setConfig] = useState(null);
+  const [services, setServices] = useState([]);
+  const [serviceSummary, setServiceSummary] = useState('Checking services…');
+  const [toast, setToast] = useState('');
+  const [authRequired, setAuthRequired] = useState(false);
+  const authDialog = useRef(null);
+  const toastTimer = useRef(null);
+
+  const notify = message => {
+    setToast(message);
+    window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => setToast(''), 3400);
+  };
+
+  useEffect(() => {
+    api('/api/config').then(data => {
+      setConfig(data);
+      setAuthRequired(Boolean(data.auth_required));
+    }).catch(() => setConfig({ jira_configured: false }));
+  }, []);
+
+  useEffect(() => {
+    if (authRequired && !accessToken && authDialog.current && !authDialog.current.open) {
+      authDialog.current.showModal();
+    } else if ((!authRequired || accessToken) && authDialog.current?.open) {
+      authDialog.current.close();
+    }
+  }, [authRequired, accessToken]);
+
+  useEffect(() => {
+    let active = true;
+    const refresh = async () => {
+      try {
+        const data = await api('/api/status', null, accessToken);
+        if (!active) return;
+        const entries = [
+          ...data.services.map(service => ({
+            name: niceName(service.name),
+            status: ['ok', 'up'].includes(service.status) ? 'ok' : 'down',
+          })),
+          { name: 'ActiveMQ broker', status: data.broker === 'reachable' ? 'ok' : 'down' },
+        ];
+        setServices(entries);
+        setServiceSummary(`${entries.filter(item => item.status === 'ok').length} / ${entries.length} dependencies available`);
+      } catch (_) {
+        if (active) setServiceSummary('Service status unavailable');
+      }
+    };
+    refresh();
+    const timer = window.setInterval(refresh, 10000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [accessToken]);
+
+  const connect = event => {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const token = String(data.get('token') || '');
+    sessionStorage.setItem('impactAtlasToken', token);
+    setAccessToken(token);
+    notify('Demo session connected.');
+  };
+
+  return h(Fragment, null,
+    h('header', { className: 'topbar' },
+      h(Brand),
+      h('div', { className: 'top-right' },
+        h('span', { className: 'live-dot', 'aria-hidden': 'true' }),
+        h('span', null, 'LOCAL DEMO'),
+        h('span', { className: 'pill' }, 'EVIDENCE SNAPSHOT'))),
+    h('main', null,
+      h('section', { className: 'intro' },
+        h('div', { className: 'intro-copy' },
+          h('div', { className: 'eyebrow' }, 'AUTONOMOUS IMPACT ASSESSMENT'),
+          h('h1', null, 'See the change', h('br'), h('em', null, 'before it ships.')),
+          h('p', null, 'Trace a Jira request across services, contracts, events, and technical debt. Every finding links back to repository evidence.')),
+        h('div', { className: 'intro-art', 'aria-hidden': 'true' },
+          h('div', { className: 'orbit orbit-a' }), h('div', { className: 'orbit orbit-b' }),
+          h('div', { className: 'core' }, '↗'),
+          h('span', { className: 'node n1' }, 'API'), h('span', { className: 'node n2' }, 'EVENT'),
+          h('span', { className: 'node n3' }, 'TEST'), h('span', { className: 'node n4' }, 'DEBT'))),
+      h('section', { className: 'status-wrap', 'aria-labelledby': 'environment-title' },
+        h('div', { className: 'section-kicker' },
+          h('h2', { id: 'environment-title' }, 'Demo environment'),
+          h('span', { role: 'status', 'aria-live': 'polite' }, serviceSummary)),
+        h('div', { className: 'service-grid' }, services.map(service =>
+          h('div', { className: `service ${service.status}`, key: service.name },
+            h('span', { className: 'service-dot', 'aria-hidden': 'true' }),
+            h('span', { className: 'service-name' }, service.name),
+            h('span', { className: 'service-state' }, service.status === 'ok' ? 'Available' : 'Unavailable'))))),
+      h('nav', { className: 'tabs', 'aria-label': 'Demo views' },
+        h('button', { type: 'button', className: `tab ${tab === 'assessment' ? 'active' : ''}`,
+          'aria-current': tab === 'assessment' ? 'page' : undefined, onClick: () => setTab('assessment') },
+          h('span', { className: 'tab-index' }, '01'), 'Impact assessment'),
+        h('button', { type: 'button', className: `tab ${tab === 'commerce' ? 'active' : ''}`,
+          'aria-current': tab === 'commerce' ? 'page' : undefined, onClick: () => setTab('commerce') },
+          h('span', { className: 'tab-index' }, '02'), 'Commerce journey'),
+        h('span', { className: 'tab-note' }, 'TWO WAYS TO EXPLORE THE SYSTEM')),
+      h('section', { className: `panel ${tab === 'assessment' ? 'active' : ''}`, id: 'assessment-panel',
+        'aria-labelledby': 'assessment-title', hidden: tab !== 'assessment' },
+        h('div', { className: 'panel-heading' },
+          h('div', null,
+            h('div', { className: 'eyebrow' }, 'JIRA → EVIDENCE → DECISION'),
+            h('h2', { id: 'assessment-title' }, 'Investigate a change'),
+            h('p', null, 'Map a requirement’s blast radius, compare related debt, and get cited engineering recommendations.')),
+          h('span', { className: 'tag' }, 'READ-ONLY ANALYSIS')),
+        h(AssessmentPanel, { token: accessToken, jiraConfigured: config?.jira_configured, notify }),
+      ),
+      h('section', { className: `panel ${tab === 'commerce' ? 'active' : ''}`, id: 'commerce-panel',
+        'aria-labelledby': 'commerce-title', hidden: tab !== 'commerce' },
+        h('div', { className: 'panel-heading' },
+          h('div', null,
+            h('div', { className: 'eyebrow' }, 'CHECKOUT → PAYMENT → SHIPPING'),
+            h('h2', { id: 'commerce-title' }, 'Follow a commerce journey'),
+            h('p', null, 'Submit a synthetic checkout and watch asynchronous order, shipment, and notification events arrive.')),
+          h('span', { className: 'tag synthetic' }, 'SYNTHETIC PROVIDERS')),
+        h(CommercePanel, { token: accessToken, notify }),
+      ),
+      h('footer', null,
+        h('span', null, 'IMPACT ATLAS · LOCAL PROTOTYPE'),
+        h('span', null, 'Assess changes with evidence. Keep the decision human.'))),
+    h('dialog', { className: 'auth-dialog', ref: authDialog, onCancel: event => {
+      if (authRequired && !accessToken) event.preventDefault();
+    } },
+      h('form', { onSubmit: connect },
+        h('div', { className: 'eyebrow' }, 'DEMO ACCESS'),
+        h('h2', null, 'Connect to Impact Atlas'),
+        h('p', null, 'This deployment requires its demo access token.'),
+        h('label', { htmlFor: 'access-token' }, 'Access token'),
+        h('input', { id: 'access-token', name: 'token', type: 'password', autoComplete: 'current-password', required: true }),
+        h('button', { className: 'button primary', type: 'submit' }, 'Continue', h(Icon, null, '↗')))),
+    h('div', { className: `toast ${toast ? 'show' : ''}`, role: 'status', 'aria-live': 'polite' }, toast));
+}
+
+function JiraKeyInput({ value, onChange, onChoose, token, disabled }) {
+  const [suggestions, setSuggestions] = useState([]);
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const [note, setNote] = useState('Search sample stories or enter your own issue ID.');
+  const sequence = useRef(0);
+  const inputId = 'jira-issue-key';
+  const listId = 'jira-suggestions';
+
+  useEffect(() => {
+    const query = value.trim();
+    const current = ++sequence.current;
+    if (query.length < 2) {
+      setSuggestions([]);
+      setOpen(false);
+      setNote('Search sample stories or enter your own issue ID.');
+      return undefined;
+    }
+    setNote('Searching sample Jira stories…');
+    const timer = window.setTimeout(async () => {
+      try {
+        const result = await api('/api/jira-search', { query }, token);
+        if (current !== sequence.current) return;
+        const issues = result.issues || [];
+        setSuggestions(issues);
+        setOpen(issues.length > 0);
+        setActiveIndex(-1);
+        setNote(issues.length
+          ? 'Choose a suggestion to load it, or keep typing a manual issue ID.'
+          : 'No matching samples. Enter a manual issue ID and provide its details.');
+      } catch (_) {
+        if (current === sequence.current) {
+          setSuggestions([]);
+          setOpen(false);
+          setNote('Suggestions unavailable. You can still enter a Jira key or manual ID.');
+        }
+      }
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [value, token]);
+
+  const choose = issue => {
+    setOpen(false);
+    setSuggestions([]);
+    onChoose(issue);
+  };
+
+  const handleKeyDown = event => {
+    if (event.key === 'ArrowDown' && suggestions.length) {
+      event.preventDefault();
+      setOpen(true);
+      setActiveIndex(index => (index + 1) % suggestions.length);
+    } else if (event.key === 'ArrowUp' && suggestions.length) {
+      event.preventDefault();
+      setActiveIndex(index => (index <= 0 ? suggestions.length - 1 : index - 1));
+    } else if (event.key === 'Enter' && open && activeIndex >= 0) {
+      event.preventDefault();
+      choose(suggestions[activeIndex]);
+    } else if (event.key === 'Escape') {
+      setOpen(false);
+    }
+  };
+
+  return h('div', { className: 'jira-key-control' },
+    h('label', { htmlFor: inputId }, 'Jira issue key or manual ID'),
+    h('div', { className: 'typeahead' },
+      h('input', {
+        id: inputId, value, onChange: event => { onChange(event.target.value); setOpen(true); },
+        onFocus: () => { if (suggestions.length) setOpen(true); }, onBlur: () => window.setTimeout(() => setOpen(false), 120),
+        onKeyDown: handleKeyDown, autoComplete: 'off', maxLength: 80, required: true, disabled,
+        placeholder: 'Search Jira or type a manual ID', role: 'combobox', 'aria-autocomplete': 'list',
+        'aria-expanded': open && suggestions.length > 0, 'aria-controls': listId,
+        'aria-activedescendant': activeIndex >= 0 ? `${listId}-${activeIndex}` : undefined,
+      }),
+      open && suggestions.length > 0 && h('div', { className: 'suggestion-menu', id: listId, role: 'listbox' },
+        suggestions.map((issue, index) => h('div', {
+          id: `${listId}-${index}`, key: issue.key, role: 'option',
+          'aria-selected': activeIndex === index, className: `suggestion ${activeIndex === index ? 'active' : ''}`,
+          onMouseDown: event => event.preventDefault(), onClick: () => choose(issue),
+        }, h('strong', null, issue.key), h('span', null, issue.summary))))),
+    h('small', { className: 'field-hint', role: 'status', 'aria-live': 'polite' }, note));
+}
+
+function AssessmentPanel({ token, jiraConfigured, notify }) {
+  const [ticketId, setTicketId] = useState(INITIAL_TICKET);
+  const [summary, setSummary] = useState(INITIAL_SUMMARY);
+  const [description, setDescription] = useState(INITIAL_DESCRIPTION);
+  const [criteria, setCriteria] = useState(INITIAL_CRITERIA);
+  const [loadingJira, setLoadingJira] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [assessment, setAssessment] = useState(null);
+  const [error, setError] = useState('');
+  const lastLoadedKey = useRef('');
+
+  const changeTicket = value => {
+    setTicketId(value);
+    if (value.trim() !== lastLoadedKey.current) {
+      setSummary('');
+      setDescription('');
+      setCriteria('');
+      setAssessment(null);
+    }
+  };
+
+  const loadIssue = async issueKey => {
+    const key = String(issueKey || ticketId).trim();
+    if (!key) return;
+    setLoadingJira(true);
+    setError('');
+    try {
+      const ticket = await api('/api/jira-issue', { issue_key: key }, token);
+      lastLoadedKey.current = ticket.ticket_id || key;
+      setTicketId(lastLoadedKey.current);
+      setSummary(ticket.summary || '');
+      setDescription(ticket.description || '');
+      setCriteria((ticket.acceptance_criteria || []).join('\n'));
+      notify(`Loaded ${lastLoadedKey.current}. Review it, then run the assessment.`);
+    } catch (issueError) {
+      setError(issueError.message);
+      notify(issueError.message);
+    } finally {
+      setLoadingJira(false);
+    }
+  };
+
+  const chooseIssue = issue => {
+    changeTicket(issue.key);
+    loadIssue(issue.key);
+  };
+
+  const loadAmbiguousExample = () => {
+    lastLoadedKey.current = '';
+    setTicketId('DEMO-SHIPPING-AMBIGUOUS');
+    setSummary('Offer expedited shipping and notify the recipient');
+    setDescription('Allow customers to expedite shipping for an order and notify the recipient. The request does not define delivery timing, eligibility, or pricing.');
+    setCriteria('');
+    setAssessment(null);
+    setError('');
+    notify('Ambiguous example loaded. Run the assessment to see focused questions.');
+  };
+
+  const submit = async event => {
+    event.preventDefault();
+    setRunning(true);
+    setAssessment(null);
+    setError('');
+    try {
+      const result = await api('/api/assess', {
+        ticket_id: ticketId.trim(), summary, description,
+        acceptance_criteria: criteria.split('\n').map(line => line.trim()).filter(Boolean),
+      }, token);
+      setAssessment(result);
+    } catch (runError) {
+      setError(runError.message);
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  return h('div', { className: 'assessment-layout' },
+    h('form', { className: 'card form-card', onSubmit: submit },
+      h(JiraKeyInput, { value: ticketId, onChange: changeTicket, onChoose: chooseIssue, token, disabled: running }),
+      h('div', { className: 'jira-fetch' },
+        h('button', { className: 'button secondary', id: 'load-jira-issue', type: 'button',
+          disabled: loadingJira || running, onClick: () => loadIssue() },
+          loadingJira ? 'Loading Jira issue…' : 'Load issue from Jira', h(Icon, null, '↓')),
+        h('small', { className: 'field-hint' }, jiraConfigured
+          ? 'Jira is connected on the app server.'
+          : 'Jira credentials are not configured on the app server.')),
+      h('label', { htmlFor: 'ticket-summary' }, 'Summary'),
+      h('input', { id: 'ticket-summary', value: summary, onChange: event => setSummary(event.target.value),
+        maxLength: 300, required: true, disabled: running, placeholder: 'Summarize the requested change' }),
+      h('label', { htmlFor: 'ticket-description' }, 'Description'),
+      h('textarea', { id: 'ticket-description', value: description, onChange: event => setDescription(event.target.value),
+        rows: 5, maxLength: 8000, disabled: running, placeholder: 'Describe the requirement and context' }),
+      h('label', { htmlFor: 'ticket-criteria' }, 'Acceptance criteria', h('span', { className: 'field-hint inline-hint' }, 'One per line')),
+      h('textarea', { id: 'ticket-criteria', value: criteria, onChange: event => setCriteria(event.target.value),
+        rows: 4, maxLength: 8000, disabled: running, placeholder: 'Add a verifiable criterion on each line' }),
+      error && h('p', { className: 'form-error', role: 'alert' }, error),
+      h('button', { className: 'button primary', type: 'submit', disabled: running || !summary.trim() },
+        running ? 'Investigating evidence…' : 'Run impact assessment', h(Icon, null, '↗')),
+      h('p', { className: 'form-foot' }, 'Uses repository evidence and cited standards · Read-only recommendations'),
+      h('button', { className: 'text-button', type: 'button', onClick: loadAmbiguousExample },
+        'Load ambiguous expedited-shipping example', h(Icon, null, '↗'))),
+    h('div', { className: 'result-area', id: 'assessment-result', 'aria-live': 'polite' },
+      running
+        ? h('div', { className: 'empty-state loading-state' }, h('div', { className: 'loading-orbit', 'aria-hidden': 'true' }),
+          h('h3', null, 'Following the change through the codebase'),
+          h('p', null, 'Searching repository evidence and trusted engineering standards…'))
+        : error && !assessment
+          ? h('div', { className: 'empty-state error-state' }, h('h3', null, 'Assessment could not run'), h('p', null, error))
+          : assessment
+            ? h(AssessmentResponse, { assessment })
+            : h('div', { className: 'empty-state' },
+              h('div', { className: 'empty-symbol', 'aria-hidden': 'true' }, '⌁'),
+              h('h3', null, 'Your impact map starts here'),
+              h('p', null, 'Run an assessment to see affected services, dependency paths, risks, debt overlap, and source evidence.'),
+              h('div', { className: 'empty-chips' }, ['API contracts', 'Event flows', 'Technical debt'].map(label => h('span', { key: label }, label))))));
+}
+
+function AssessmentResponse({ assessment }) {
+  const [fullOpen, setFullOpen] = useState(false);
+  const impacts = assessment.impacts || [];
+  const risks = assessment.risks || [];
+  const evidence = assessment.evidence || [];
+  const questions = assessment.questions || [];
+  const citations = new Map(evidence.map(item => [item.evidence_id, item]));
+  const citationNodes = ids => (ids || []).map((id, index) => {
+    const item = citations.get(id);
+    const label = item ? `${item.repository}/${item.path}:${item.line_start}-${item.line_end}` : id;
+    return h('code', { key: `${id}-${index}` }, label);
+  }).flatMap((node, index, all) => index < all.length - 1 ? [node, ' · '] : [node]);
+
+  const classification = assessment.classification;
+  const recommendations = assessment.code_recommendations || [];
+  const recommendationTrace = (assessment.trace || []).find(item => item.agent === 'code-recommendation-engine');
+  const recommendationParams = recommendationTrace?.parameters || {};
+  const noRecommendationsText = recommendationParams.source_count
+    ? `Web search found ${recommendationParams.source_count} approved sources, but no recommendation passed repository-evidence and citation checks. See the investigation trace for details.`
+    : 'Web search found no approved source pages for this run. The evidence-backed impact assessment is still available.';
+
+  const impactContent = impacts.length
+    ? impacts.map((item, index) => h('article', { className: 'finding', key: `${item.finding_id || item.repository}-${index}` },
+      h('span', { className: 'badge' }, readable(item.classification)),
+      h('h5', null, `${item.repository} · ${item.component}`),
+      h('p', null, `${item.claim} ${item.business_relevance}`),
+      h('div', { className: 'citation-list' }, citationNodes(item.evidence_ids))))
+    : h('p', { className: 'muted' }, 'No direct impacts returned.');
+
+  const riskContent = risks.length
+    ? risks.map((item, index) => h('article', { className: 'risk-item', key: `${item.failure_mode}-${index}` },
+      h('span', { className: `badge ${/high|critical/i.test(item.severity) ? 'warn' : ''}` }, `${item.severity} risk`),
+      h('h5', null, item.failure_mode),
+      h('p', null, `${item.business_consequence} · Validate: ${(item.recommended_validation || []).join('; ')}`),
+      h('div', { className: 'citation-list' }, citationNodes(item.evidence_ids))))
+    : h('p', { className: 'muted' }, 'No specific risks were verified from retrieved evidence.');
+
+  const debtItems = assessment.debt_assessments || [];
+  const recommendationContent = recommendations.length
+    ? recommendations.map((item, index) => h('article', { className: 'recommendation-item', key: `${item.repository}-${index}` },
+      h('h5', null, `${item.repository} · ${item.title}`),
+      h('p', null, item.recommendation),
+      h('p', { className: 'muted' }, `Why it fits: ${item.rationale}`),
+      h('p', null, 'Local evidence: ', citationNodes(item.evidence_ids)),
+      item.code_example && h('pre', null, h('code', null, item.code_example)),
+      h('div', { className: 'recommendation-sources' }, (item.sources || []).map(source =>
+        h('a', { key: source.url, href: source.url, target: '_blank', rel: 'noopener noreferrer' }, `${source.title} ↗`)))))
+    : h('p', { className: 'muted' }, recommendationsMessage(assessment.code_recommendation_status, noRecommendationsText));
+
+  const traceItems = assessment.trace || [];
+  const paths = assessment.dependency_paths || [];
+  const report = () => {
+    const blob = new Blob([assessment.report_markdown || ''], { type: 'text/markdown' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `${assessment.context.ticket_id}-impact-report.md`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  };
+
+  return h('div', { className: 'assessment-result' },
+    h('div', { className: 'result-head' },
+      h('div', null, h('h3', null, 'Assessment response'),
+        h('small', null, `${assessment.context.ticket_id} · snapshot ${assessment.context.snapshot_id}`)),
+      h('div', { className: 'result-actions' },
+        assessment.langfuse_trace_url
+          ? h('a', { className: 'trace-link', href: assessment.langfuse_trace_url, target: '_blank', rel: 'noopener noreferrer' }, 'Open Langfuse trace ↗')
+          : h('span', { className: 'trace-state' }, `Langfuse ${readable(assessment.langfuse_trace_status || 'not configured')} · local trace below`),
+        h('button', { className: 'download', type: 'button', onClick: report }, '↓ Report'))),
+    h('div', { className: 'summary-card' },
+      h('span', { className: 'eyebrow' }, readable(assessment.status).toUpperCase()),
+      h('p', null, assessment.summary)),
+    classification
+      ? h('div', { className: 'classification-peek', 'aria-label': 'Jira impact classification summary' },
+        classificationChip('Scope', readable(classification.impact_scope?.label || 'unclear')),
+        classificationChip('Change', readable(classification.change_kind?.label || 'mixed or unclear')),
+        classificationChip('Clarity', classification.clarity?.label || 'unknown'),
+        classification.review_recommended && h('span', { className: 'classification-chip review-chip' }, 'Review suggested'))
+      : h('div', { className: 'classification-peek' }, h('span', { className: 'classification-chip' }, `Classification ${readable(assessment.classification_status || 'not configured')}`)),
+    h('a', { className: 'full-response-link', href: '#full-response', 'aria-controls': 'full-response',
+      'aria-expanded': fullOpen, onClick: event => { event.preventDefault(); setFullOpen(open => !open); } },
+      `${fullOpen ? 'Hide' : 'View'} full response · ${impacts.length} impacts · ${questions.length} questions · ${evidence.length} evidence items ${fullOpen ? '↑' : '↓'}`),
+    h('details', { className: 'assessment-response', id: 'full-response', open: fullOpen },
+      h('summary', { className: 'visually-hidden' }, 'Full assessment response'),
+      h('div', { className: 'assessment-response-body' },
+        h(CollapsibleRow, { title: 'Assessment metrics', open: true },
+          h('div', { className: 'metric-row' },
+            metric(impacts.length, 'Impact findings'), metric(risks.length, 'Risks'), metric(evidence.length, 'Evidence items'))),
+        h(CollapsibleRow, { title: 'Jira impact classification', open: true, className: 'classification-row' },
+          h('div', { className: 'classification-detail' },
+            h('span', null, h('b', null, classification?.provider || 'Classifier')),
+            h('span', null, `Scope confidence ${classification?.impact_scope?.confidence ?? 'n/a'}`),
+            h('span', null, `Change confidence ${classification?.change_kind?.confidence ?? 'n/a'}`),
+            h('span', null, `Clarification probability ${classification?.requires_clarification_probability ?? 'n/a'}`),
+            h('span', null, classification?.review_recommended ? 'Human review suggested' : 'No review flag'))),
+        h(CollapsibleRow, { title: 'Clarifications · Business risks · Service impact', open: true, className: 'three-column-row' },
+          h(ResultCard, { title: 'Clarifications needed' }, questions.length
+            ? h('ul', null, questions.map((question, index) => h('li', { key: index }, question)))
+            : h('p', { className: 'muted' }, 'No clarification questions for this assessment.')),
+          h(ResultCard, { title: 'Business risks & validation' }, riskContent),
+          h(ResultCard, { title: 'Service and component impact' }, impactContent)),
+        h(CollapsibleRow, { title: 'Code recommendations · Technical debt · Dependency paths', open: true, className: 'three-column-row' },
+          h(ResultCard, { title: 'Code recommendations · industry sources' }, recommendationContent,
+            recommendations.length > 0 && h('p', { className: 'muted' }, 'Recommendations are advisory; validate against project evidence and team conventions.')),
+          h(ResultCard, { title: 'Technical debt overlap' }, debtItems.length
+            ? debtItems.map((item, index) => h('article', { className: 'debt-item', key: `${item.debt_id}-${index}` },
+              h('span', { className: `badge ${item.disposition === 'consider' ? 'warn' : ''}` }, readable(item.disposition)),
+              h('h5', null, `${item.repository} · ${item.title}`),
+              h('p', null, `${item.reason} · ${item.total_hours == null ? 'effort unknown' : `${item.total_hours}h incl. testing`}`),
+              h('p', null, `Shared tests: ${(item.shared_tests || []).join(', ') || 'none identified'}`)))
+            : h('p', { className: 'muted' }, 'No related debt items.')),
+          h(ResultCard, { title: 'Dependency paths' }, paths.length
+            ? h('ul', null, paths.map((path, index) => h('li', { key: index }, typeof path === 'string' ? path : JSON.stringify(path))))
+            : h('p', { className: 'muted' }, 'No dependency paths were confirmed.'))),
+        h(CollapsibleRow, { title: `Evidence used · ${evidence.length} items`, open: true, className: 'full-row' },
+          h(ResultCard, { title: `Evidence used (${evidence.length})` }, evidence.length
+            ? evidence.slice(0, 16).map((item, index) => h('article', { className: 'evidence-item', key: `${item.evidence_id}-${index}` },
+              h('h5', null, `${item.repository} · ${item.section || item.document_type}`),
+              h('p', null, item.excerpt),
+              h('code', null, `${item.path}:${item.line_start}-${item.line_end} · ${item.commit}`)))
+            : h('p', { className: 'muted' }, 'No evidence attached.'))),
+        h(CollapsibleRow, { title: `Show investigation trace · ${traceItems.length} events`, className: 'full-row trace-row' },
+          traceItems.length
+            ? h('ol', { className: 'trace-list' }, traceItems.map((item, index) => h('li', { key: `${item.agent}-${index}` },
+              h('b', null, `${item.agent} · ${item.name}`), ` · ${item.outcome}`,
+              item.duration_ms != null && ` · ${Math.round(item.duration_ms)}ms`,
+              h('details', { className: 'trace-event' }, h('summary', null, 'Inspect event'),
+                h('pre', null, JSON.stringify({ type: item.event_type, parameters: item.parameters,
+                  evidence_ids: item.evidence_ids, error: item.error }, null, 2))))))
+            : h('p', { className: 'muted' }, 'No trace events are available.')))));
+}
+
+function recommendationsMessage(status, emptyMessage) {
+  const messages = {
+    not_configured: 'Set OPENAI_API_KEY on the app server to enable cited web recommendations.',
+    disabled: 'Web recommendations are disabled.',
+    unavailable: 'Web search was unavailable; the evidence-backed impact assessment is still available.',
+    skipped_no_verified_impacts: 'No verified impact was available to scope a code recommendation.',
+    no_cited_recommendations: emptyMessage,
+  };
+  return messages[status] || 'No web recommendations were returned.';
+}
+
+function classificationChip(label, value) {
+  return h('span', { className: 'classification-chip', key: label },
+    h('small', null, label), value);
+}
+
+function metric(value, label) {
+  return h('div', { className: 'metric', key: label }, h('b', null, value), h('span', null, label));
+}
+
+function ResultCard({ title, children, className = '' }) {
+  return h('section', { className: `result-block ${className}`.trim() }, h('h4', null, title), children);
+}
+
+function CollapsibleRow({ title, children, className = '', open = false }) {
+  return h('details', { className: `response-row ${className}`.trim(), open: open || undefined },
+    h('summary', null, title), h('div', { className: 'response-row-content' }, children));
+}
+
+function CommercePanel({ token, notify }) {
+  const [form, setForm] = useState({ sku: 'book', quantity: '1', total_cents: '2500', payment_token: 'demo-token', delivery_address: '10 Main St, New York, NY' });
+  const [sending, setSending] = useState(false);
+  const [orderId, setOrderId] = useState('');
+  const [orderData, setOrderData] = useState(null);
+  const [journeyTitle, setJourneyTitle] = useState('Waiting for checkout');
+  const [selectedEvent, setSelectedEvent] = useState('checkout');
+  const [error, setError] = useState('');
+  const [attempts, setAttempts] = useState(0);
+
+  useEffect(() => {
+    if (!orderId || attempts >= 12 || orderData?.shipment) return undefined;
+    let active = true;
+    const timer = window.setTimeout(async () => {
+      try {
+        const state = await api(`/api/order/${encodeURIComponent(orderId)}`, null, token);
+        if (!active) return;
+        setOrderData(current => ({ ...(current || {}), ...state }));
+        setAttempts(value => value + 1);
+        if (state.shipment || attempts >= 11) {
+          setJourneyTitle(state.shipment ? 'Shipment and events received' : 'Order accepted · awaiting shipment');
+        }
+      } catch (_) {
+        if (active) setAttempts(value => value + 1);
+      }
+    }, 1200);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [orderId, orderData, attempts, token]);
+
+  const setField = (name, value) => setForm(current => ({ ...current, [name]: value }));
+  const submit = async event => {
+    event.preventDefault();
+    setSending(true);
+    setError('');
+    setOrderId('');
+    setOrderData(null);
+    setAttempts(0);
+    setJourneyTitle('Order in progress');
+    try {
+      const response = await api('/api/commerce-order', {
+        sku: form.sku,
+        quantity: Number(form.quantity),
+        total_cents: Number(form.total_cents),
+        payment_token: form.payment_token,
+        delivery_address: form.delivery_address,
+      }, token);
+      setOrderId(response.order_id);
+      setOrderData(response);
+      setJourneyTitle('Order accepted · waiting for shipment');
+      notify('Checkout accepted. Following its events…');
+    } catch (submitError) {
+      setError(submitError.message);
+      setJourneyTitle('Checkout failed');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const stepStates = {
+    checkout: Boolean(orderId),
+    payment: orderData?.checkout?.status === 'confirmed',
+    shipment: Boolean(orderData?.shipment),
+    notification: Boolean(orderData?.order_notification || orderData?.shipment_notification),
+  };
+  const eventSteps = [
+    ['checkout', 'Checkout accepted', 'Cart sent to order service'],
+    ['payment', 'Payment authorized', 'Mock payment provider'],
+    ['shipment', 'Shipment created', 'Carrier tracking assigned'],
+    ['notification', 'Customer notified', 'Order and shipment messages'],
+  ];
+  const eventDetails = {
+    checkout: {
+      title: 'Checkout accepted', status: stepStates.checkout ? 'Accepted' : 'Waiting',
+      message: stepStates.checkout ? 'The checkout request was accepted by the commerce service.' : 'Place a demo order to create a checkout event.',
+      data: orderData?.checkout || (orderId ? { order_id: orderId } : null),
+    },
+    payment: {
+      title: 'Payment authorization', status: stepStates.payment ? 'Authorized' : 'Waiting',
+      message: stepStates.payment
+        ? 'The order was confirmed after payment authorization. The demo API does not return the provider authorization ID.'
+        : 'Payment authorization follows inventory reservation when checkout is submitted.',
+      data: stepStates.payment ? { order_id: orderId, status: 'authorized', amount_cents: Number(form.total_cents), currency: 'USD' } : null,
+    },
+    shipment: {
+      title: 'Shipment created', status: stepStates.shipment ? 'Created' : 'Waiting',
+      message: stepStates.shipment ? 'The carrier assigned tracking details to this order.' : 'Shipment details will appear after the order event is consumed.',
+      data: orderData?.shipment || null,
+    },
+    notification: {
+      title: 'Customer notifications', status: stepStates.notification ? 'Sent' : 'Waiting',
+      message: stepStates.notification ? 'Notification service stored the order and/or shipment message.' : 'Order and shipment notifications arrive asynchronously.',
+      data: stepStates.notification ? {
+        order_notification: orderData?.order_notification || null,
+        shipment_notification: orderData?.shipment_notification || null,
+      } : null,
+    },
+  };
+
+  return h('div', { className: 'commerce-layout' },
+    h('form', { className: 'card form-card', onSubmit: submit },
+      h('div', { className: 'two-col' },
+        h(Field, { label: 'SKU', id: 'commerce-sku' }, h('input', { id: 'commerce-sku', value: form.sku, required: true,
+          onChange: event => setField('sku', event.target.value) })),
+        h(Field, { label: 'Quantity', id: 'commerce-quantity' }, h('input', { id: 'commerce-quantity', type: 'number', value: form.quantity,
+          min: 1, max: 100, required: true, onChange: event => setField('quantity', event.target.value) }))),
+      h('div', { className: 'two-col' },
+        h(Field, { label: 'Total · cents', id: 'commerce-total' }, h('input', { id: 'commerce-total', type: 'number', value: form.total_cents,
+          min: 1, required: true, onChange: event => setField('total_cents', event.target.value) })),
+        h(Field, { label: 'Payment token', id: 'commerce-token' }, h('select', { id: 'commerce-token', value: form.payment_token,
+          onChange: event => setField('payment_token', event.target.value) },
+          h('option', { value: 'demo-token' }, 'demo-token'), h('option', { value: 'demo-decline' }, 'demo-decline')))),
+      h(Field, { label: 'Delivery address', id: 'commerce-address' }, h('input', { id: 'commerce-address', value: form.delivery_address, required: true,
+        onChange: event => setField('delivery_address', event.target.value) })),
+      error && h('p', { className: 'form-error', role: 'alert' }, error),
+      h('button', { className: 'button primary', type: 'submit', disabled: sending },
+        sending ? 'Sending checkout…' : orderId ? 'Place another order' : 'Place demo order', h(Icon, null, '↗')),
+      h('p', { className: 'form-foot' }, 'No real payment is taken and no real carrier is contacted.')),
+    h('section', { className: 'journey card', 'aria-labelledby': 'journey-title' },
+      h('div', { className: 'journey-head' },
+        h('div', null, h('div', { className: 'eyebrow' }, 'EVENT TIMELINE'), h('h3', { id: 'journey-title', role: 'status', 'aria-live': 'polite' }, journeyTitle)),
+        h('span', { className: 'pulse', 'aria-hidden': 'true' })),
+      h('div', { className: 'steps', role: 'group', 'aria-label': 'Select an event to inspect' }, eventSteps.map(([key, title, detail], index) => h('button', {
+        type: 'button', className: `step ${stepStates[key] ? 'complete' : ''} ${selectedEvent === key ? 'selected' : ''}`,
+        key, 'aria-pressed': selectedEvent === key, onClick: () => setSelectedEvent(key),
+        'aria-label': `${title}: ${stepStates[key] ? 'Complete' : 'Pending'}`,
+      },
+        h('span', { className: 'step-icon', 'aria-hidden': 'true' }, `0${index + 1}`),
+        h('div', null, h('b', null, title), h('small', null, detail)),
+        h('span', { className: 'step-state' }, stepStates[key] ? 'Complete' : 'Pending')))),
+      h(EventDetailCard, eventDetails[selectedEvent])));
+}
+
+function EventDetailCard({ title, status, message, data }) {
+  return h('section', { className: 'event-detail-card', 'aria-live': 'polite', 'aria-labelledby': 'selected-event-title' },
+    h('div', { className: 'event-detail-head' },
+      h('div', null, h('span', { className: 'eyebrow' }, 'SELECTED EVENT'), h('h4', { id: 'selected-event-title' }, title)),
+      h('span', { className: `event-status ${status === 'Waiting' ? 'pending' : 'complete'}` }, status)),
+    h('p', null, message),
+    data
+      ? h('pre', { className: 'event-payload' }, JSON.stringify(data, null, 2))
+      : h('p', { className: 'event-empty' }, 'No event payload is available yet.'));
+}
+
+function Field({ label, id, children }) {
+  return h('div', { className: 'field-group' }, h('label', { htmlFor: id }, label), children);
+}
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(h(App));

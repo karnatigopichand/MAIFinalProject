@@ -31,7 +31,14 @@ SERVICE_URLS = {
 for _service_name in tuple(SERVICE_URLS):
     _env_name = "IMPACT_URL_" + _service_name.replace("-", "_").upper()
     SERVICE_URLS[_service_name] = os.environ.get(_env_name, SERVICE_URLS[_service_name]).rstrip("/")
-ASSETS = {"/": "index.html", "/index.html": "index.html", "/app.css": "app.css", "/app.js": "app.js"}
+ASSETS = {
+    "/": "index.html",
+    "/index.html": "index.html",
+    "/app.css": "app.css",
+    "/app.js": "app.js",
+    "/vendor/react.production.min.js": "vendor/react.production.min.js",
+    "/vendor/react-dom.production.min.js": "vendor/react-dom.production.min.js",
+}
 
 
 def _json_call(url, payload=None, timeout=2):
@@ -100,7 +107,7 @@ def create_handler(workspace: Path, auth_token=None):
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("X-Frame-Options", "DENY")
             self.send_header("Referrer-Policy", "same-origin")
-            self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'; frame-ancestors 'none'")
+            self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'; frame-ancestors 'none'")
 
         def authorized(self):
             if not auth_token:
