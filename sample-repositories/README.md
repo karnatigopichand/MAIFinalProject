@@ -90,7 +90,7 @@ ACTIVEMQ_TEST_HOST=127.0.0.1 .venv/bin/python -m unittest discover -s tests -p t
 
 Run that command from the workspace using an environment containing `stomp.py`. The live check uses the named `commerce.integration.shipping` and `commerce.integration.notifications` queues, which may remain on the broker afterward.
 
-Each service has seven implementation-reviewed guides, an OpenAPI 3.1 specification, reviewed source hashes, and multiple authored debt documents. The old summary generator has been removed. Documentation is maintained alongside code; the validator checks source freshness, routes, configured servers, and references without overwriting prose. The workspace-level impact workflow is described in the root README; Pinecone/Neo4j ingestion remains a separate integration step.
+Each service has seven implementation-reviewed guides, an OpenAPI 3.1 specification, reviewed source hashes, and multiple authored debt documents. The old summary generator has been removed. Documentation is maintained alongside code; the validator checks source freshness, routes, configured servers, and references without overwriting prose. The workspace-level impact workflow and evidence pipeline are described in the root README. Local indexing is available without hosted services; optional Pinecone/Neo4j publishing and hosted retrieval are provided by the workspace CLI and require their deployment credentials.
 
 ## Reliability boundaries
 

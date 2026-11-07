@@ -56,6 +56,27 @@ class JiraClient:
         query = parse.urlencode({"fields": ",".join(fields)})
         return self._call("GET", f"/rest/api/3/issue/{parse.quote(issue_key, safe='')}?{query}")
 
+    def search_issue_suggestions(self, query, project_key=None, limit=10):
+        """Return Jira issue-picker matches for the configured demo stories."""
+        current_jql = 'labels = "impact-assessment-sample"'
+        if project_key and re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,19}", project_key):
+            current_jql = f'project = "{project_key}" AND {current_jql}'
+        params = parse.urlencode({"query": query, "currentJQL": current_jql})
+        response = self._call("GET", f"/rest/api/3/issue/picker?{params}")
+        suggestions, seen = [], set()
+        for section in response.get("sections", []):
+            if section.get("label") != "Current Search":
+                continue
+            for issue in section.get("issues", []):
+                key = issue.get("key")
+                if not isinstance(key, str) or key in seen:
+                    continue
+                seen.add(key)
+                suggestions.append({"key": key, "summary": issue.get("summaryText") or issue.get("summary") or ""})
+                if len(suggestions) >= limit:
+                    return suggestions
+        return suggestions
+
     def has_run_comment(self, issue_key, run_id):
         marker = f"Impact assessment run: {run_id}"
         start = 0

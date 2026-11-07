@@ -138,6 +138,16 @@ def build_graph(workspace: Path, max_hours=3.0, tool_budget=24, graph_hops=3):
             risks=[Risk(**item) for item in review["risks"]], questions=questions,
             limitations=list(dict.fromkeys(limitations)),
             evidence=[Evidence(**item) for item in review["evidence"]], trace=trace.events)
+        from .integrations.jev_classifier import classify_jira_requirement
+        assessment.classification_status, assessment.classification = classify_jira_requirement(state["ticket"], trace)
+        from .integrations.code_recommendations import generate_code_recommendations
+        (assessment.code_recommendation_status,
+         assessment.code_recommendations) = generate_code_recommendations(assessment, trace)
+        from .integrations.langfuse_trace import export_assessment
+        langfuse = export_assessment(assessment)
+        assessment.langfuse_trace_status = langfuse["status"] or "error"
+        assessment.langfuse_trace_id = langfuse["trace_id"]
+        assessment.langfuse_trace_url = langfuse["trace_url"]
         assessment.report_markdown = render_report(assessment)
         workflow.persist(assessment)
         return {"assessment": assessment.to_dict(), "trace": [event.__dict__ for event in trace.events]}

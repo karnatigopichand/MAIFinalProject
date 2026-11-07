@@ -3,13 +3,190 @@
   "label_status": "provisional_requires_domain_owner_review",
   "source": "Eight scenario descriptions from plan/overall-plan.md. Expected repository sets and question checks are provisional and must be reviewed before release-gate use.",
   "cases": [
-    {"id":"B01","ticket":{"ticket_id":"BENCH-1","ticket_version":"1","summary":"Pass delivery instructions from checkout to the carrier and shipment confirmation","description":"Customers can provide optional delivery instructions. Forward them from checkout through order processing to the carrier and include them in the shipment notification.","acceptance_criteria":["Instructions are optional.","Instructions are included in shipment confirmation."]},"expected_repositories":["commerce-checkout","commerce-orders","commerce-shipping","commerce-notifications"],"expected_question_terms":[],"debt_must_not_be_recommended":true},
-    {"id":"B02","ticket":{"ticket_id":"BENCH-2","ticket_version":"1","summary":"Change the inventory reservation rule","description":"Update the quantity reservation behavior for a SKU when an order is accepted. Payment authorization behavior is unchanged.","acceptance_criteria":["A reservation cannot exceed available stock."]},"expected_repositories":["commerce-inventory"],"forbidden_repositories":["commerce-payments"],"expected_question_terms":[],"debt_must_not_be_recommended":true},
-    {"id":"B03","ticket":{"ticket_id":"BENCH-3","ticket_version":"1","summary":"Normalize authorization fields returned by the payment provider","description":"Map the provider authorization amount and currency fields to the internal payment record and validate the payment contract.","acceptance_criteria":["Amount and currency retain their meaning after mapping."]},"expected_repositories":["commerce-payments"],"expected_question_terms":[],"debt_must_not_be_recommended":true},
-    {"id":"B04","ticket":{"ticket_id":"BENCH-4","ticket_version":"1","summary":"Add a fulfillment priority to the order confirmed event","description":"Add a fulfillment_priority field to order.confirmed.v1 and make sure every consumer remains compatible.","acceptance_criteria":["Existing consumers continue to process the event."]},"expected_repositories":["commerce-orders","commerce-shipping","commerce-notifications"],"expected_question_terms":[],"debt_must_not_be_recommended":true},
-    {"id":"B05","ticket":{"ticket_id":"BENCH-5","ticket_version":"1","summary":"Change the shipment notification template","description":"Update the wording and layout used by the customer shipment notification. Do not change upstream order or carrier behavior.","acceptance_criteria":["The new wording appears in the shipment notification."]},"expected_repositories":["commerce-notifications"],"expected_question_terms":[],"debt_must_not_be_recommended":true},
-    {"id":"B06","ticket":{"ticket_id":"BENCH-6","ticket_version":"1","summary":"Offer expedited shipping and notify the recipient","description":"Allow customers to expedite shipping for an order and notify the recipient. The request does not define delivery timing, destination eligibility, or pricing.","acceptance_criteria":[]},"expected_repositories":["commerce-shipping","commerce-notifications","commerce-orders"],"expected_question_terms":["delivery window","charge","eligible"],"debt_must_not_be_recommended":true},
-    {"id":"B07","ticket":{"ticket_id":"BENCH-7","ticket_version":"1","summary":"Validate checkout delivery-address mapping","description":"Improve validation for the checkout delivery-address mapping and reuse its existing service tests.","acceptance_criteria":["Invalid address mappings are rejected."]},"expected_repositories":["commerce-checkout"],"expected_question_terms":[],"expected_debt_id":"CHECKOUT-TD-001","expected_debt_disposition":"needs_clarification","debt_must_not_be_recommended":true,"known_fixture_gap":"The matching mapping-validation debt entry currently has an illustrative 1h implementation plus 1h testing estimate, not a team-reviewed two-hour estimate."},
-    {"id":"B08","ticket":{"ticket_id":"BENCH-8","ticket_version":"1","summary":"Make service processing more durable","description":"Improve durability and retry behavior across the services, including stronger recovery tests.","acceptance_criteria":["Transient failures recover without duplicate processing."]},"expected_repositories":[],"expected_question_terms":[],"debt_must_not_be_recommended":true}
+    {
+      "id": "B01",
+      "ticket": {
+        "ticket_id": "BENCH-1",
+        "ticket_version": "1",
+        "summary": "Pass delivery instructions from checkout to the carrier and shipment confirmation",
+        "description": "Customers can provide optional delivery instructions. Forward them from checkout through order processing to the carrier and include them in the shipment notification.",
+        "acceptance_criteria": [
+          "Instructions are optional.",
+          "Instructions are included in shipment confirmation."
+        ]
+      },
+      "expected_repositories": [
+        "commerce-checkout",
+        "commerce-orders",
+        "commerce-shipping",
+        "commerce-notifications"
+      ],
+      "expected_question_terms": [],
+      "debt_must_not_be_recommended": true,
+      "expected_classification": {
+        "impact_scope": "multi_service",
+        "change_kind": "event_or_message_flow"
+      }
+    },
+    {
+      "id": "B02",
+      "ticket": {
+        "ticket_id": "BENCH-2",
+        "ticket_version": "1",
+        "summary": "Change the inventory reservation rule",
+        "description": "Update the quantity reservation behavior for a SKU when an order is accepted. Payment authorization behavior is unchanged.",
+        "acceptance_criteria": [
+          "A reservation cannot exceed available stock."
+        ]
+      },
+      "expected_repositories": [
+        "commerce-inventory"
+      ],
+      "forbidden_repositories": [
+        "commerce-payments"
+      ],
+      "expected_question_terms": [],
+      "debt_must_not_be_recommended": true,
+      "expected_classification": {
+        "impact_scope": "single_service",
+        "change_kind": "business_rule"
+      }
+    },
+    {
+      "id": "B03",
+      "ticket": {
+        "ticket_id": "BENCH-3",
+        "ticket_version": "1",
+        "summary": "Normalize authorization fields returned by the payment provider",
+        "description": "Map the provider authorization amount and currency fields to the internal payment record and validate the payment contract.",
+        "acceptance_criteria": [
+          "Amount and currency retain their meaning after mapping."
+        ]
+      },
+      "expected_repositories": [
+        "commerce-payments"
+      ],
+      "expected_question_terms": [],
+      "debt_must_not_be_recommended": true,
+      "expected_classification": {
+        "impact_scope": "single_service",
+        "change_kind": "external_provider_mapping"
+      }
+    },
+    {
+      "id": "B04",
+      "ticket": {
+        "ticket_id": "BENCH-4",
+        "ticket_version": "1",
+        "summary": "Add a fulfillment priority to the order confirmed event",
+        "description": "Add a fulfillment_priority field to order.confirmed.v1 and make sure every consumer remains compatible.",
+        "acceptance_criteria": [
+          "Existing consumers continue to process the event."
+        ]
+      },
+      "expected_repositories": [
+        "commerce-orders",
+        "commerce-shipping",
+        "commerce-notifications"
+      ],
+      "expected_question_terms": [],
+      "debt_must_not_be_recommended": true,
+      "expected_classification": {
+        "impact_scope": "multi_service",
+        "change_kind": "event_or_message_flow"
+      }
+    },
+    {
+      "id": "B05",
+      "ticket": {
+        "ticket_id": "BENCH-5",
+        "ticket_version": "1",
+        "summary": "Change the shipment notification template",
+        "description": "Update the wording and layout used by the customer shipment notification. Do not change upstream order or carrier behavior.",
+        "acceptance_criteria": [
+          "The new wording appears in the shipment notification."
+        ]
+      },
+      "expected_repositories": [
+        "commerce-notifications"
+      ],
+      "expected_question_terms": [],
+      "debt_must_not_be_recommended": true,
+      "expected_classification": {
+        "impact_scope": "single_service",
+        "change_kind": "notification_or_presentation"
+      }
+    },
+    {
+      "id": "B06",
+      "ticket": {
+        "ticket_id": "BENCH-6",
+        "ticket_version": "1",
+        "summary": "Offer expedited shipping and notify the recipient",
+        "description": "Allow customers to expedite shipping for an order and notify the recipient. The request does not define delivery timing, destination eligibility, or pricing.",
+        "acceptance_criteria": []
+      },
+      "expected_repositories": [
+        "commerce-shipping",
+        "commerce-notifications",
+        "commerce-orders"
+      ],
+      "expected_question_terms": [
+        "delivery window",
+        "charge",
+        "eligible",
+        "standard shipping",
+        "email",
+        "when should the recipient be notified"
+      ],
+      "debt_must_not_be_recommended": true,
+      "expected_classification": {
+        "impact_scope": "multi_service",
+        "change_kind": "business_rule"
+      }
+    },
+    {
+      "id": "B07",
+      "ticket": {
+        "ticket_id": "BENCH-7",
+        "ticket_version": "1",
+        "summary": "Validate checkout delivery-address mapping",
+        "description": "Improve validation for the checkout delivery-address mapping and reuse its existing service tests.",
+        "acceptance_criteria": [
+          "Invalid address mappings are rejected."
+        ]
+      },
+      "expected_repositories": [
+        "commerce-checkout"
+      ],
+      "expected_question_terms": [],
+      "expected_debt_id": "CHECKOUT-TD-001",
+      "expected_debt_disposition": "needs_clarification",
+      "debt_must_not_be_recommended": true,
+      "known_fixture_gap": "The matching mapping-validation debt entry currently has an illustrative 1h implementation plus 1h testing estimate, not a team-reviewed two-hour estimate.",
+      "expected_classification": {
+        "impact_scope": "single_service",
+        "change_kind": "data_validation_or_testing"
+      }
+    },
+    {
+      "id": "B08",
+      "ticket": {
+        "ticket_id": "BENCH-8",
+        "ticket_version": "1",
+        "summary": "Make service processing more durable",
+        "description": "Improve durability and retry behavior across the services, including stronger recovery tests.",
+        "acceptance_criteria": [
+          "Transient failures recover without duplicate processing."
+        ]
+      },
+      "expected_repositories": [],
+      "expected_question_terms": [],
+      "debt_must_not_be_recommended": true,
+      "expected_classification": {
+        "impact_scope": "cross_cutting",
+        "change_kind": "reliability_or_persistence"
+      }
+    }
   ]
 }

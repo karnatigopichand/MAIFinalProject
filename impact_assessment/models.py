@@ -111,6 +111,17 @@ class Risk:
 
 
 @dataclass
+class CodeRecommendation:
+    repository: str
+    title: str
+    recommendation: str
+    rationale: str
+    code_example: str
+    evidence_ids: list[str] = field(default_factory=list)
+    sources: list[dict[str, str]] = field(default_factory=list)
+
+
+@dataclass
 class Assessment:
     context: RunContext
     status: str
@@ -124,6 +135,13 @@ class Assessment:
     evidence: list[Evidence]
     trace: list[TraceEvent]
     report_markdown: str = ""
+    langfuse_trace_status: str = "not_configured"
+    langfuse_trace_id: str | None = None
+    langfuse_trace_url: str | None = None
+    code_recommendations: list[CodeRecommendation] = field(default_factory=list)
+    code_recommendation_status: str = "not_configured"
+    classification: dict[str, Any] | None = None
+    classification_status: str = "not_configured"
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

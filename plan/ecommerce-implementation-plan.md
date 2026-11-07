@@ -56,17 +56,17 @@ The previous `generate_sample_docs.py` summary generator has been removed to pre
 
 Review source hashes are stored in each `docs/source-review.json`. Refresh them only after reviewing changed behavior and updating affected specifications. Once targets become independent repositories, also capture their immutable commits. Do not present configured hosts as verified deployments or document authentication/schema enforcement that is not implemented.
 
-## Integration and deployment steps still pending
+## Integration and deployment status
 
 1. Agree on service contracts and review the small generated application with teammates.
 2. Assign one target directory per teammate or pair; ownership is independent of agent ownership.
 3. Extract each directory into its own Git repository when authorized; preserve package layout and add a local documentation-review/validation workflow.
 4. Record repository URLs and immutable commits in the AI-system manifest.
-5. Connect the existing documentation corpus to the planned Pinecone/Neo4j indexing tools; the local evidence snapshot/MCP tools currently provide the replay path.
-6. Start each API and shipping/notifications workers using the service guide; verify real provider and broker connectivity. Configure Jira and hosted delivery separately.
-7. Check Replit runtime/storage/network behavior early; retain local replay.
+5. The workspace now has Graphify extraction/reconciliation, Pinecone and Neo4j publishing adapters, snapshot-scoped hosted retrieval, and an MCP retrieval server. Configure and verify those external stores before selecting hosted mode.
+6. Start each API and shipping/notifications workers using the service guide; verify actual provider and broker connectivity. Configure Jira and hosted delivery separately.
+7. Validate Replit runtime/storage/network behavior; retain local replay as a fallback.
 
-The application corpus alone does not implement the AI workflow. A separate local evidence-backed three-agent vertical slice, optional LangGraph/MCP adapters, and Jira integration are now in the workspace root; Pinecone, Neo4j, model-backed reasoning, and deployment remain integration work.
+The application corpus is accompanied by the workspace AI workflow, demo UI, MCP tools, optional LangGraph orchestration, Pinecone/Neo4j adapters, Jev/OpenAI classification, Langfuse tracing, and deterministic/LLM-judge evaluation. These integrations are optional and require configured credentials/packages; the agents still use deterministic evidence and policy logic rather than generative model reasoning. Jira account setup, live broker/provider verification, and Replit deployment remain external integration work.
 
 ## Acceptance criteria
 

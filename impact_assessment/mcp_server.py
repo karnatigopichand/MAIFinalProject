@@ -51,6 +51,26 @@ def create_server(workspace: Path | None = None, snapshot_id: str | None = None)
         return {"snapshot_id": pinned_snapshot, "results": [item.__dict__ for item in results]}
 
     @server.tool()
+    def search_evidence(query: str, snapshot_id: str, repositories: list[str] | None = None,
+                        document_types: list[str] | None = None, limit: int = 10) -> dict:
+        """RAG retrieval across source, docs, contracts, and debt, with snapshot provenance."""
+        check_snapshot(snapshot_id)
+        allowed_types = {"source", "documentation", "contract", "technical_debt", "test"}
+        if document_types is not None and not set(document_types).issubset(allowed_types):
+            raise ValueError("Unsupported evidence document type")
+        if not 1 <= limit <= 30:
+            raise ValueError("limit must be between 1 and 30")
+        results = store.search(query, check_repositories(repositories), document_types=document_types, limit=limit)
+        return {"snapshot_id": pinned_snapshot, "results": [item.__dict__ for item in results]}
+
+    @server.tool()
+    def list_technical_debt(snapshot_id: str, repositories: list[str] | None = None) -> dict:
+        """List debt metadata from this snapshot; use search_technical_debt for relevance ranking."""
+        check_snapshot(snapshot_id)
+        items = store.debt_items(check_repositories(repositories))
+        return {"snapshot_id": pinned_snapshot, "results": [item.__dict__ for item in items]}
+
+    @server.tool()
     def search_technical_debt(query: str, snapshot_id: str, repositories: list[str] | None = None,
                               limit: int = 12) -> dict:
         """Find debt items by relevance; eligibility must be verified separately."""
@@ -110,6 +130,20 @@ def create_server(workspace: Path | None = None, snapshot_id: str | None = None)
         results = store.search_identifiers(component_id, limit=12)
         results = [item for item in results if item.document_type in {"contract", "documentation"}]
         return {"snapshot_id": pinned_snapshot, "results": [item.__dict__ for item in results]}
+
+    @server.tool()
+    def classify_jira_impact(summary: str, description: str, snapshot_id: str,
+                             acceptance_criteria: list[str] | None = None) -> dict:
+        """Classify Jira scope, change kind, clarity, and clarification need with Jev."""
+        check_snapshot(snapshot_id)
+        if len(summary) > 2000 or len(description) > 20000 or len(acceptance_criteria or []) > 30:
+            raise ValueError("Ticket exceeds classification input bounds")
+        from .integrations.jev_classifier import classify_jira_requirement
+        status, classification = classify_jira_requirement({
+            "summary": summary, "description": description,
+            "acceptance_criteria": acceptance_criteria or [],
+        })
+        return {"snapshot_id": pinned_snapshot, "status": status, "classification": classification}
 
     return server
 

@@ -10,6 +10,33 @@ from .integrations.pinecone import PineconeEvidenceIndex
 from .store import LocalEvidenceStore
 
 
+def publish_pinecone_snapshot(workspace: Path):
+    """Publish only semantic evidence vectors; graph traversal remains local."""
+    store = LocalEvidenceStore(workspace.resolve())
+    snapshot = store.build_snapshot()
+    errors = validate_snapshot(snapshot)
+    if errors:
+        raise RuntimeError("Snapshot validation failed: " + "; ".join(errors[:8]))
+
+    pinecone = PineconeEvidenceIndex()
+    vector_result = pinecone.publish(snapshot)
+    vector_validation = pinecone.verify(snapshot)
+    marker = {
+        "snapshot_id": snapshot["snapshot_id"],
+        "published_at": datetime.now(timezone.utc).isoformat(),
+        "pinecone": vector_result,
+        "pinecone_validation": vector_validation,
+        "source_hashes": snapshot["source_hashes"],
+    }
+    marker_dir = store.state_dir / "pinecone"
+    marker_dir.mkdir(parents=True, exist_ok=True)
+    temporary = marker_dir / f".{snapshot['snapshot_id']}.tmp"
+    temporary.write_text(json.dumps(marker, indent=2, sort_keys=True), encoding="utf-8")
+    temporary.replace(marker_dir / f"{snapshot['snapshot_id']}.json")
+    return {"snapshot_id": snapshot["snapshot_id"], "evidence_count": len(snapshot["evidence"]),
+            "published": True, "pinecone": vector_result, "pinecone_validation": vector_validation}
+
+
 def validate_snapshot(snapshot):
     evidence = snapshot["evidence"]
     errors = []

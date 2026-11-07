@@ -4,7 +4,7 @@
 
 The assessment system reads a Jira requirement and a pinned application snapshot. It returns a sourced change-impact report, risks, tests, debt candidates, and open questions. It never writes to the six commerce repositories. The only writes are the versioned evidence index, assessment artifacts, and an optional Jira comment.
 
-This workspace now contains a runnable, dependency-free local vertical slice in `impact_assessment/`. It builds a content-addressed evidence snapshot, extracts dependency edges from the checked-in service configs, runs the three specialist stages, checks evidence IDs against that snapshot, and persists `assessment.json`, `report.md`, and `trace.ndjson`. Optional LangGraph orchestration and a read-only MCP server can run over that local snapshot. Jira webhook and comment-delivery code is implemented but needs credentials and HTTPS ingress. Reasoning is deterministic retrieval and policy code; Pinecone, Neo4j, language-model reasoning, and Langfuse are not configured.
+The local workflow builds a content-addressed evidence snapshot, extracts contract edges, runs the three bounded specialist stages, checks evidence IDs against that snapshot, and persists `assessment.json`, `report.md`, and `trace.ndjson`. Optional Graphify extraction, Pinecone vector retrieval, Neo4j graph traversal, LangGraph orchestration, MCP tools, Jev/OpenAI impact classification, Langfuse tracing, Jira webhook/comment delivery, and OpenAI web recommendations are implemented behind optional dependencies or credentials. Deterministic replay and the candidate LLM-as-judge evaluator are available. These integrations are not evidence that external accounts or services are provisioned. The impact/debt/risk agents use deterministic retrieval and policy logic; Jev or OpenAI provides advisory ticket classification and the LLM judge runs only when explicitly requested. The workflow calls the common evidence-store interface directly; MCP is currently exposed as an interoperability server, not used as the agent-to-store transport.
 
 ## Target architecture
 
@@ -58,17 +58,20 @@ The local prototype stores this data under ignored `.impact_assessment/snapshots
 Expose bounded, read-only tools with an explicit `snapshot_id` parameter:
 
 ```text
-search_docs(query, repositories?, limit?)
-search_technical_debt(query, repositories?, limit?)
-search_identifiers(query, repositories?, limit?)
-traverse_dependencies(start_ids, relationships?, direction, max_hops, limit)
-fetch_evidence(evidence_ids)
-get_contract(component_id)
+search_evidence(query, snapshot_id, repositories?, document_types?, limit?)
+search_docs(query, snapshot_id, repositories?, limit?)
+search_technical_debt(query, snapshot_id, repositories?, limit?)
+list_technical_debt(snapshot_id, repositories?)
+search_identifiers(query, snapshot_id, repositories?, limit?)
+traverse_dependencies(start_ids, snapshot_id, relationships?, max_hops, limit)
+fetch_evidence(evidence_ids, snapshot_id)
+get_contract(component_id, snapshot_id)
+classify_jira_impact(summary, description, snapshot_id, acceptance_criteria?)
 ```
 
 Every result includes provenance, empty/error state, and snapshot ID. Validate relationship names, constrain hops/results/timeouts, and avoid arbitrary Cypher or Pinecone filter expressions from the model. Source fetch accepts only IDs returned by the selected snapshot. Agents have no index-write tool.
 
-The `impact_assessment/mcp_server.py` adapter wraps `LocalEvidenceStore` with bounded read-only MCP tools. It uses one pinned snapshot per server process and rejects mismatched snapshot IDs. Production adapters route the same operations to the selected Pinecone namespace/index and Neo4j database.
+The `impact_assessment/mcp_server.py` adapter exposes bounded read-only MCP tools and pins the server to one snapshot. It rejects mismatched snapshot IDs. The evidence store can select local, Pinecone, or combined hosted search/graph backends. Jira classification can use Jev or OpenAI according to `IMPACT_CLASSIFIER_PROVIDER`; it is an optional external decision call, not retrieval. Keep MCP read tools separate from the snapshot publishing commands.
 
 ## Workflow and status rules
 
@@ -95,11 +98,11 @@ The adapter in `impact_assessment/integrations/jira.py` accepts either Jira's HM
 
 ## Trace and privacy
 
-Each trace event records run, agent, tool, timestamp, sanitized search parameters, evidence IDs, outcome/error, and duration. It must not record credentials, payment data, raw request bodies, private model reasoning, or full sensitive Jira descriptions. Model observations should record provider/model name and token usage when available. Subagent runs should appear as distinct agent nodes rather than duplicate dispatch and execution nodes. The local implementation records inspectable JSONL traces, but no Langfuse connection is configured.
+Each trace event records run, agent, tool, timestamp, sanitized search parameters, evidence IDs, outcome/error, and duration. It must not record credentials, payment data, raw request bodies, private model reasoning, or full sensitive Jira descriptions. Model observations should record provider/model name and token usage when available. Subagent runs should appear as distinct agent nodes rather than duplicate dispatch and execution nodes. The local implementation records inspectable JSONL traces and can optionally export assessment observations to Langfuse; search terms are omitted by default.
 
 ## Runtime and evaluation
 
-Use local replay as the deterministic baseline. For hosted operation, pin compatible versions of LangGraph, the Pinecone SDK, Neo4j driver, MCP SDK, model SDK, and tracing SDK in a lockfile; pass credentials through secret storage, never checked-in config. Deploy behind authenticated Jira webhook ingress. Replit is a deployment target to validate after storage, worker, and outbound network behavior are confirmed.
+Use local replay as the deterministic baseline. Optional runtime dependencies are listed in `requirements-agent-runtime.txt`; credentials belong in environment/secret storage, never checked-in config. The fixed eight-ticket evaluator reports repository precision/recall, retrieved-evidence recall, evidence/path validity, clarification checks, debt eligibility, and runtime/tool errors. `--jev-classification` adds provider classification scoring. `--llm-judge` sends ticket/report/evidence excerpts to OpenAI and writes advisory scores using the candidate rubric in `evaluation/llm-judge-rubric-v1.md`; it may incur charges and must be calibrated against reviewed labels before any release-gate use. Jira ingress requires authentication and HTTPS in hosted deployment. Replit still requires deployment validation.
 
 Keep the eight benchmark expected outputs outside retrieval/indexed content. Score repository precision/recall, evidence-reference validity, correct edge/path support, question quality, debt gates, duplicate delivery, runtime, and tool errors. Review human-labeled expected impacts before treating a score as a release gate. The local CLI is the replay entry point; hosted evaluation should preserve the same snapshot and contracts.
 
@@ -115,11 +118,10 @@ Implemented now:
 - Authenticated Jira transition intake, issue-version/snapshot deduplication, saved report comments, and retryable delivery in `impact_assessment/integrations/jira.py`.
 - Replay CLI in `impact_assessment/cli.py`.
 
-Next integrations, in order:
+Remaining work, in order:
 
 1. Add Pydantic validation at persisted/agent boundaries and bounded verification-request routing in LangGraph.
-2. Implement snapshot writers/readers for Pinecone and Neo4j behind the existing store operations; run graph extraction and reconciliation against source configs/contracts.
-3. Connect agents as MCP clients to the selected snapshot backend; test pinning and query filters.
-4. Add model-backed structured requirement normalization and verification, with the same evidence and eligibility gates.
-5. Add a run lookup UI and configure the Jira transition, webhook, credentials, and HTTPS ingress.
-6. Run the eight-ticket benchmark, resolve unsupported findings, verify the live ActiveMQ/provider flow separately, then validate Replit.
+2. Integrate the agent tool calls through an MCP client if required by the final runtime, preserving snapshot checks and bounded operations.
+3. Review and calibrate benchmark labels and the judge rubric with domain owners; run the evaluation only when external calls and data sharing are approved.
+4. Configure the Jira transition, webhook, credentials, and HTTPS ingress; validate saved-comment delivery.
+5. Verify real ActiveMQ/provider delivery separately, then validate Replit deployment and runtime behavior.

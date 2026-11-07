@@ -1,0 +1,5 @@
+entrypoint = "impact_assessment/__main__.py"
+run = "python3 -m impact_assessment ui"
+
+[deployment]
+run = "python3 -m impact_assessment ui"

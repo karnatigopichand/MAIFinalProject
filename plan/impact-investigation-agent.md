@@ -1,5 +1,7 @@
 # Impact Investigation Agent plan
 
+> **Implementation status:** The deterministic investigation stage is implemented in `impact_assessment/agents.py` and uses the evidence-store interface, exact identifier search, and dependency traversal. The optional MCP server exposes equivalent bounded retrieval tools, but the workflow currently calls the store directly. Jev/OpenAI classification is advisory intake classification; it does not replace evidence-backed impact analysis.
+
 ## Purpose
 
 Understand the Jira requirement and establish which e-commerce components need changes or validation. This agent incorporates the former Requirements Agent; there is no separate requirements specialist.

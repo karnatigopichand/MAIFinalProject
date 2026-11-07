@@ -42,15 +42,18 @@ Changing investigation findings invalidates overlapping debt decisions. Rerun de
 Retrieval MCP server:
 
 ```text
+search_evidence
 search_docs
 search_technical_debt
+list_technical_debt
 search_identifiers
 traverse_dependencies
 fetch_evidence
 get_contract
+classify_jira_impact
 ```
 
-All tools accept/validate a snapshot ID and return provenance and explicit empty/error outcomes. Traversal uses approved relationship types, direction, maximum depth, and result bounds.
+Retrieval tools accept/validate a snapshot ID and return provenance and explicit empty/error outcomes. Traversal uses approved relationship types, maximum depth, and result bounds. `classify_jira_impact` uses the configured Jev or OpenAI provider; ticket text is sent to the selected provider. The current agent workflow calls the common evidence-store interface directly; MCP is the external interoperability surface.
 
 Separate controlled write pipeline:
 

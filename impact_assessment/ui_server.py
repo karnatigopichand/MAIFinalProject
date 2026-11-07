@@ -14,7 +14,8 @@ from pathlib import Path
 from urllib import error, request
 from urllib.parse import urlsplit
 
-from .workflow import AssessmentWorkflow
+from .integrations.jira import JiraClient
+from .workflow import AssessmentWorkflow, ticket_from_jira
 
 
 SERVICE_URLS = {
@@ -129,7 +130,11 @@ def create_handler(workspace: Path, auth_token=None):
 
         def do_GET(self):
             if self.path == "/api/config":
-                return self.send_json(200, {"auth_required": bool(auth_token)})
+                jira_keys = ("IMPACT_JIRA_BASE_URL", "IMPACT_JIRA_EMAIL", "IMPACT_JIRA_API_TOKEN")
+                missing = [key for key in jira_keys if not os.environ.get(key)]
+                return self.send_json(200, {"auth_required": bool(auth_token),
+                                            "jira_configured": not missing,
+                                            "jira_missing_settings": missing})
             if self.path.startswith("/api/") and not self.authorized():
                 return self.send_json(401, {"error": "unauthorized"})
             if self.path == "/api/status":
@@ -170,7 +175,7 @@ def create_handler(workspace: Path, auth_token=None):
                 return self.send_json(401, {"error": "unauthorized"})
             if not self.within_rate_limit():
                 return self.send_json(429, {"error": "rate_limit_exceeded", "detail": "Try again in one minute."})
-            if self.path not in {"/api/assess", "/api/commerce-order"}:
+            if self.path not in {"/api/assess", "/api/commerce-order", "/api/jira-issue", "/api/jira-search"}:
                 return self.send_json(404, {"error": "not_found"})
             try:
                 length = int(self.headers.get("Content-Length", "0"))
@@ -181,6 +186,10 @@ def create_handler(workspace: Path, auth_token=None):
                     return self.send_json(400, {"error": "json_object_required"})
                 if self.path == "/api/assess":
                     return self.assess(payload)
+                if self.path == "/api/jira-issue":
+                    return self.fetch_jira_issue(payload)
+                if self.path == "/api/jira-search":
+                    return self.search_jira_issues(payload)
                 return self.commerce_order(payload)
             except (ValueError, KeyError, TypeError) as exc:
                 return self.send_json(400, {"error": "invalid_request", "detail": str(exc)[:160]})
@@ -209,6 +218,48 @@ def create_handler(workspace: Path, auth_token=None):
             with run_lock:
                 assessment = workflow.run(ticket)
             return self.send_json(200, assessment.to_dict())
+
+        def fetch_jira_issue(self, payload):
+            issue_key = payload.get("issue_key", "")
+            if not isinstance(issue_key, str) or not issue_key.strip() or len(issue_key) > 80:
+                return self.send_json(400, {"error": "invalid_issue_key"})
+            jira_keys = ("IMPACT_JIRA_BASE_URL", "IMPACT_JIRA_EMAIL", "IMPACT_JIRA_API_TOKEN")
+            missing = [key for key in jira_keys if not os.environ.get(key)]
+            if missing:
+                return self.send_json(503, {"error": "jira_not_configured",
+                                            "detail": "Set these server environment variables: " + ", ".join(missing)})
+            criteria_field = os.environ.get("IMPACT_JIRA_CRITERIA_FIELD", "customfield_10000")
+            try:
+                issue = JiraClient().get_issue(issue_key.strip(), criteria_field)
+                ticket = ticket_from_jira(issue, criteria_field)
+            except RuntimeError as exc:
+                return self.send_json(502, {"error": "jira_fetch_failed", "detail": str(exc)})
+            except Exception as exc:
+                return self.send_json(502, {"error": "jira_fetch_failed",
+                                            "detail": f"Jira request failed ({type(exc).__name__})"})
+            if not ticket.get("summary"):
+                return self.send_json(502, {"error": "jira_issue_invalid",
+                                            "detail": "Jira returned an issue without a summary; check the issue key and read permission."})
+            return self.send_json(200, ticket)
+
+        def search_jira_issues(self, payload):
+            query = payload.get("query", "")
+            if not isinstance(query, str) or len(query.strip()) < 2 or len(query) > 80:
+                return self.send_json(200, {"issues": []})
+            jira_keys = ("IMPACT_JIRA_BASE_URL", "IMPACT_JIRA_EMAIL", "IMPACT_JIRA_API_TOKEN")
+            missing = [key for key in jira_keys if not os.environ.get(key)]
+            if missing:
+                return self.send_json(503, {"error": "jira_not_configured",
+                                            "detail": "Set these server environment variables: " + ", ".join(missing)})
+            try:
+                issues = JiraClient().search_issue_suggestions(
+                    query.strip(), os.environ.get("JIRA_PROJECT_KEY"), limit=10)
+            except RuntimeError as exc:
+                return self.send_json(502, {"error": "jira_search_failed", "detail": str(exc)})
+            except Exception as exc:
+                return self.send_json(502, {"error": "jira_search_failed",
+                                            "detail": f"Jira search failed ({type(exc).__name__})"})
+            return self.send_json(200, {"issues": issues})
 
         def commerce_order(self, payload):
             sku = payload.get("sku", "book")

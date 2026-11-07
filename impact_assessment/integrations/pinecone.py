@@ -13,13 +13,15 @@ class PineconeEvidenceIndex:
     def __init__(self, api_key=None, host=None):
         api_key = api_key or os.environ.get("PINECONE_API_KEY")
         host = host or os.environ.get("PINECONE_INDEX_HOST")
-        if not api_key or not host:
-            raise RuntimeError("Set PINECONE_API_KEY and PINECONE_INDEX_HOST for Pinecone retrieval")
+        index_name = os.environ.get("PINECONE_INDEX")
+        if not api_key or not (host or index_name):
+            raise RuntimeError("Set PINECONE_API_KEY and either PINECONE_INDEX_HOST or PINECONE_INDEX")
         try:
             from pinecone import Pinecone
         except ImportError as exc:
             raise RuntimeError("Install the optional Pinecone SDK from requirements-agent-runtime.txt") from exc
-        self.index = Pinecone(api_key=api_key).Index(host=host)
+        client = Pinecone(api_key=api_key)
+        self.index = client.Index(host=host) if host else client.Index(name=index_name)
 
     @staticmethod
     def _namespace(snapshot_id):

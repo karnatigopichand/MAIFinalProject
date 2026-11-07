@@ -3,25 +3,45 @@ from __future__ import annotations
 
 import json
 import time
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
 from .workflow import AssessmentWorkflow
 
 
-def run_benchmark(workspace: Path, benchmark_path: Path | None = None):
+def run_benchmark(workspace: Path, benchmark_path: Path | None = None,
+                 jev_classification: bool = False, llm_judge: bool = False):
     workspace = workspace.resolve()
     benchmark_path = benchmark_path or workspace / "evaluation" / "benchmark-v1.json"
     fixture = json.loads(benchmark_path.read_text(encoding="utf-8"))
+    # Keep the default replay repeatable and offline, even in a developer shell
+    # that has optional provider credentials configured.
+    managed_env = ("IMPACT_EVIDENCE_BACKEND", "CODE_RECOMMENDATIONS_ENABLED",
+                   "IMPACT_CLASSIFICATION_ENABLED", "IMPACT_CLASSIFIER_PROVIDER",
+                   "JEV_CLASSIFICATION_ENABLED", "LANGFUSE_PUBLIC_KEY",
+                   "LANGFUSE_SECRET_KEY", "LANGFUSE_BASE_URL")
+    previous_env = {key: os.environ.get(key) for key in managed_env}
+    os.environ["IMPACT_EVIDENCE_BACKEND"] = "local"
+    os.environ["CODE_RECOMMENDATIONS_ENABLED"] = "false"
+    os.environ["IMPACT_CLASSIFICATION_ENABLED"] = "false"
+    os.environ["IMPACT_CLASSIFIER_PROVIDER"] = "auto"
+    os.environ["JEV_CLASSIFICATION_ENABLED"] = "false"
+    for key in ("LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "LANGFUSE_BASE_URL"):
+        os.environ.pop(key, None)
     workflow = AssessmentWorkflow(workspace)
     rows = []
     total_tp = total_fp = total_fn = 0
-    for case in fixture["cases"]:
+    jev_rows, judge_rows = [], []
+    try:
+      for case in fixture["cases"]:
         started = time.monotonic()
         assessment = workflow.run(case["ticket"])
         elapsed = round((time.monotonic() - started) * 1000, 2)
         actual = {item.repository for item in assessment.impacts}
         expected = set(case.get("expected_repositories", []))
+        retrieved_repositories = {item.repository for item in assessment.evidence}
+        retrieved_tp = len(retrieved_repositories & expected)
         tp, fp, fn = len(actual & expected), len(actual - expected), len(expected - actual)
         total_tp += tp
         total_fp += fp
@@ -56,6 +76,8 @@ def run_benchmark(workspace: Path, benchmark_path: Path | None = None):
             "expected_repositories": sorted(expected), "actual_repositories": sorted(actual),
             "repository_counts": {"true_positive": tp, "false_positive": fp, "false_negative": fn},
             "evidence_count": len(assessment.evidence),
+            "retrieved_repositories": sorted(retrieved_repositories),
+            "retrieval_expected_repository_recall": round(retrieved_tp / len(expected), 4) if expected else None,
             "invalid_evidence_references": sorted({eid for finding in assessment.impacts
                 for eid in finding.evidence_ids if eid not in workflow.store.current["evidence"]}),
             "dependency_paths": assessment.dependency_paths,
@@ -69,6 +91,36 @@ def run_benchmark(workspace: Path, benchmark_path: Path | None = None):
             "runtime_ms": elapsed, "trace_event_count": len(assessment.trace), "tool_error_count": tool_errors,
             "known_fixture_gap": case.get("known_fixture_gap"),
         })
+        if jev_classification:
+            from .integrations.jev_classifier import classify_jira_requirement
+            os.environ["JEV_CLASSIFICATION_ENABLED"] = "true"
+            os.environ["IMPACT_CLASSIFICATION_ENABLED"] = "true"
+            os.environ["IMPACT_CLASSIFIER_PROVIDER"] = "jev"
+            status, classification = classify_jira_requirement(case["ticket"])
+            os.environ["IMPACT_CLASSIFICATION_ENABLED"] = "false"
+            os.environ["IMPACT_CLASSIFIER_PROVIDER"] = "auto"
+            os.environ["JEV_CLASSIFICATION_ENABLED"] = "false"
+            expected_class = case.get("expected_classification", {})
+            actual_class = {key: (classification or {}).get(key, {}).get("label")
+                            for key in ("impact_scope", "change_kind")}
+            jev_rows.append({"case_id": case["id"], "status": status,
+                             "expected": expected_class, "actual": actual_class,
+                             "matches": {key: actual_class.get(key) == expected_class.get(key)
+                                         for key in expected_class}})
+        if llm_judge:
+            from .evaluation_judge import judge_case
+            try:
+                judge_rows.append({"case_id": case["id"], "status": "scored",
+                                   **judge_case(case, assessment.to_dict())})
+            except RuntimeError as exc:
+                judge_rows.append({"case_id": case["id"], "status": "error", "error": str(exc),
+                                   "rubric_version": "impact-judge-v1"})
+    finally:
+        for key, value in previous_env.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
     precision = total_tp / (total_tp + total_fp) if total_tp + total_fp else 1.0
     recall = total_tp / (total_tp + total_fn) if total_tp + total_fn else 1.0
     result = {
@@ -76,6 +128,10 @@ def run_benchmark(workspace: Path, benchmark_path: Path | None = None):
         "source": fixture["source"], "created_at": datetime.now(timezone.utc).isoformat(),
         "snapshot_id": workflow.store.current["snapshot_id"], "case_count": len(rows),
         "repository_precision_micro": round(precision, 4), "repository_recall_micro": round(recall, 4),
+        "retrieval_expected_repository_recall_macro": round(sum(
+            row["retrieval_expected_repository_recall"] for row in rows
+            if row["retrieval_expected_repository_recall"] is not None) / max(1, sum(
+                row["retrieval_expected_repository_recall"] is not None for row in rows)), 4),
         "invalid_evidence_reference_count": sum(len(row["invalid_evidence_references"]) for row in rows),
         "invalid_dependency_edge_reference_count": sum(len(row["invalid_dependency_edge_references"]) for row in rows),
         "invalid_path_evidence_reference_count": sum(len(row["invalid_path_evidence_references"]) for row in rows),
@@ -83,6 +139,17 @@ def run_benchmark(workspace: Path, benchmark_path: Path | None = None):
         "forbidden_repository_count": sum(len(row["forbidden_repositories_found"]) for row in rows),
         "ineligible_debt_recommendation_count": sum(len(row["recommended_debt_when_forbidden"]) for row in rows),
         "cases": rows,
+        "jev_classification": ({"model": os.environ.get("JEV_MODEL", "jev-1.13"), "cases": jev_rows,
+            "scored_case_count": sum(bool(item["matches"]) and item["status"] in {"ready", "needs_review"}
+                                     for item in jev_rows),
+            "accuracy": (round(sum(all(item["matches"].values()) for item in jev_rows
+                                    if item["matches"] and item["status"] in {"ready", "needs_review"})
+                                / sum(bool(item["matches"]) and item["status"] in {"ready", "needs_review"}
+                                      for item in jev_rows), 4)
+                         if any(bool(item["matches"]) and item["status"] in {"ready", "needs_review"}
+                                for item in jev_rows) else None)} if jev_classification else None),
+        "llm_judge": ({"rubric_version": "impact-judge-v1", "status": "advisory_uncalibrated",
+                       "cases": judge_rows} if llm_judge else None),
         "limitations": ["Labels are provisional and require review by a domain owner.",
                         "Local debt estimates are illustrative; B07 cannot validate a reviewed two-hour recommendation.",
                         "This local replay does not validate Jira, hosted stores, Replit, or live-broker readiness."],

@@ -5,3 +5,5 @@ mcp>=2.0.0,<3
 pinecone>=7.0,<9
 neo4j>=5.0,<7
 graphifyy>=0.9.100,<1
+# Optional observability exporter (Python SDK v5; Langfuse server v4.59+).
+langfuse>=5.0,<6

@@ -35,8 +35,11 @@ def main(argv=None):
     commands.add_parser("ui", help="Serve the local browser demo UI")
     publish = commands.add_parser("publish", help="Validate and publish the current snapshot to Pinecone and Neo4j")
     publish.add_argument("--dry-run", action="store_true", help="Build and validate locally without contacting hosted stores")
+    commands.add_parser("publish-pinecone", help="Store the current evidence vectors in Pinecone; keep graph traversal local")
     evaluate = commands.add_parser("evaluate", help="Replay the fixed eight-ticket evaluation set")
     evaluate.add_argument("--benchmark", help="Benchmark JSON path (defaults to evaluation/benchmark-v1.json)")
+    evaluate.add_argument("--jev-classification", action="store_true", help="Call Jev for each case and score its Jira classification (requires JEV_API_KEY)")
+    evaluate.add_argument("--llm-judge", action="store_true", help="Call the configured OpenAI model to judge each case; sends ticket/evidence excerpts and may incur API charges")
     commands.add_parser("extract-graph", help="Run Graphify and reconcile code edges with explicit service contracts")
     deliver = commands.add_parser("deliver", help="Retry posting a saved assessment to Jira")
     deliver.add_argument("run_id")
@@ -68,6 +71,10 @@ def main(argv=None):
         from .pipeline import publish_snapshot
         print(json.dumps(publish_snapshot(workspace, dry_run=args.dry_run), indent=2))
         return 0
+    if args.command == "publish-pinecone":
+        from .pipeline import publish_pinecone_snapshot
+        print(json.dumps(publish_pinecone_snapshot(workspace), indent=2))
+        return 0
     if args.command == "extract-graph":
         from .graphify_pipeline import run_graphify
         print(json.dumps(run_graphify(workspace), indent=2))
@@ -75,7 +82,7 @@ def main(argv=None):
     if args.command == "evaluate":
         from .evaluate import run_benchmark
         benchmark = Path(args.benchmark).resolve() if args.benchmark else None
-        print(json.dumps(run_benchmark(workspace, benchmark), indent=2))
+        print(json.dumps(run_benchmark(workspace, benchmark, args.jev_classification, args.llm_judge), indent=2))
         return 0
     if args.command == "deliver":
         print(json.dumps(retry_delivery(workspace, args.run_id, JiraClient())))
@@ -94,7 +101,7 @@ def main(argv=None):
     if args.orchestrator == "langgraph":
         from .langgraph_coordinator import build_graph
         state = build_graph(workspace, max_hours=args.max_debt_hours).invoke({"ticket": ticket})
-        from .models import Assessment, DebtAssessment, Evidence, ImpactFinding, Risk, RunContext, TraceEvent
+        from .models import Assessment, CodeRecommendation, DebtAssessment, Evidence, ImpactFinding, Risk, RunContext, TraceEvent
         raw = state["assessment"]
         assessment = Assessment(
             context=RunContext(**raw["context"]), status=raw["status"], summary=raw["summary"],
@@ -102,7 +109,11 @@ def main(argv=None):
             debt_assessments=[DebtAssessment(**x) for x in raw["debt_assessments"]],
             risks=[Risk(**x) for x in raw["risks"]], questions=raw["questions"],
             limitations=raw["limitations"], evidence=[Evidence(**x) for x in raw["evidence"]],
-            trace=[TraceEvent(**x) for x in raw["trace"]], report_markdown=raw["report_markdown"])
+            trace=[TraceEvent(**x) for x in raw["trace"]], report_markdown=raw["report_markdown"],
+            code_recommendations=[CodeRecommendation(**x) for x in raw.get("code_recommendations", [])],
+            code_recommendation_status=raw.get("code_recommendation_status", "not_configured"))
+        assessment.classification = raw.get("classification")
+        assessment.classification_status = raw.get("classification_status", "not_configured")
     else:
         assessment = workflow.run(ticket)
     run_dir = workflow.state_dir / "runs" / assessment.context.run_id

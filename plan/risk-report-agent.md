@@ -1,5 +1,7 @@
 # Risk and Report Agent plan
 
+> **Implementation status:** Evidence verification, bounded reinvestigation requests, structured risks/questions, report rendering, and local trace persistence are implemented across `impact_assessment/agents.py` and `impact_assessment/workflow.py`. Langfuse export is optional. The LLM judge is a separate opt-in evaluator; its candidate rubric is not calibrated or a release gate.
+
 ## Purpose
 
 Verify the other agents' findings, explain technical and business risks, and produce an actionable assessment. Evidence verification is part of this agent rather than a separate fourth specialist.

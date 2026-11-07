@@ -50,7 +50,11 @@ class ImpactInvestigationAgent:
         self.tool_calls += 1
         started = time.monotonic()
         result = self.store.search(query, **kwargs)
-        self.trace.add(self.name, "tool", "search-evidence", {"query_terms": sorted(_tokens(query))[:12]},
+        backend = "pinecone" if self.store.__class__.__name__ == "PineconeEvidenceStore" else (
+            "pinecone+neo4j" if self.store.__class__.__name__ == "HostedEvidenceStore" else "local"
+        )
+        self.trace.add(self.name, "tool", "search-evidence",
+                       {"backend": backend, "query_terms": sorted(_tokens(query))[:12]},
                        [item.evidence_id for item in result], outcome="ok" if result else "empty",
                        duration_ms=round((time.monotonic() - started) * 1000, 2))
         return result
@@ -330,6 +334,13 @@ class RiskAndReportAgent:
                        ("all orders", "eligible orders", "eligibility criteria", "only for",
                         "available for", "domestic", "international")):
                 questions.append("Which orders and destinations are eligible for expedited shipping?")
+            if not any(word in trace_terms for word in ("fallback", "standard shipping", "unavailable", "not available")):
+                questions.append("If expedited service is unavailable for an order or destination, should checkout offer standard shipping or block the option?")
+        if any(word in trace_terms for word in ("notify", "notification", "alert")):
+            if not any(word in trace_terms for word in ("email", "sms", "text message", "push notification")):
+                questions.append("How should the recipient be notified (email, SMS, or another channel)?")
+            if not any(word in trace_terms for word in ("when to notify", "after shipment", "when shipped", "tracking", "dispatch")):
+                questions.append("When should the recipient be notified: when expedited shipping is selected, when the carrier accepts it, or when the shipment is dispatched?")
         missing = not evidence_ids or not verified
         status = "failed" if missing else ("needs_clarification" if questions else "complete")
         limitations = []

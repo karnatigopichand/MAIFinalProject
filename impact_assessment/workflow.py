@@ -27,17 +27,53 @@ def _plain(value):
     return str(value)
 
 
+def _jira_acceptance_criteria(description) -> tuple[str, list[str]]:
+    """Split Jira's rich-text description into prose and its AC list, if present."""
+    if not isinstance(description, dict) or not isinstance(description.get("content"), list):
+        return _plain(description), []
+
+    content = description["content"]
+    criteria_heading = next((i for i, node in enumerate(content)
+                             if node.get("type") == "heading"
+                             and "acceptance criteria" in _plain(node).strip().lower()), None)
+    if criteria_heading is None:
+        return _plain(description), []
+
+    prose = {**description, "content": content[:criteria_heading]}
+    criteria = []
+    for node in content[criteria_heading + 1:]:
+        if node.get("type") == "heading":
+            break
+        if node.get("type") in {"bulletList", "orderedList"}:
+            criteria.extend(_plain(item).strip() for item in node.get("content", [])
+                            if _plain(item).strip())
+        elif _plain(node).strip():
+            criteria.append(_plain(node).strip())
+    return _plain(prose), criteria
+
+
 def ticket_from_jira(issue: dict, criteria_field="customfield_10000") -> dict:
     fields = issue.get("fields", {})
-    criteria = fields.get(criteria_field) or []
-    if isinstance(criteria, str):
-        criteria = [criteria]
+    description, description_criteria = _jira_acceptance_criteria(fields.get("description", ""))
+    raw_criteria = fields.get(criteria_field)
+    if isinstance(raw_criteria, dict) and raw_criteria.get("type") == "doc":
+        criteria = [_plain(block).strip() for block in raw_criteria.get("content", [])
+                    if _plain(block).strip()]
+    elif isinstance(raw_criteria, str):
+        value = raw_criteria.strip()
+        criteria = [value] if value and value != "{}" else []
+    elif isinstance(raw_criteria, list):
+        criteria = [_plain(item).strip() for item in raw_criteria if _plain(item).strip()]
+    else:
+        criteria = []
+    if not criteria:
+        criteria = description_criteria
     return {
         "ticket_id": issue.get("key", "LOCAL-1"),
         "ticket_version": str(fields.get("updated") or issue.get("id") or "1"),
         "summary": _plain(fields.get("summary", "")),
-        "description": _plain(fields.get("description", "")),
-        "acceptance_criteria": [_plain(x) for x in criteria if _plain(x).strip()],
+        "description": description,
+        "acceptance_criteria": criteria,
     }
 
 
@@ -59,6 +95,17 @@ def render_report(assessment: Assessment) -> str:
             lines.append(f"| `{finding.repository}` | {finding.classification} | {finding.component} | {refs} |")
     else:
         lines.append("| No supported impact found | — | — | — |")
+    lines.extend(["", "## Jira impact classification", ""])
+    if assessment.classification:
+        c = assessment.classification
+        lines.extend([f"- Provider/model: {c.get('provider')} / {c.get('model')}",
+                      f"- Scope: {c.get('impact_scope', {}).get('label')} (confidence {c.get('impact_scope', {}).get('confidence')})",
+                      f"- Change kind: {c.get('change_kind', {}).get('label')} (confidence {c.get('change_kind', {}).get('confidence')})",
+                      f"- Clarity: {c.get('clarity', {}).get('label') or c.get('clarity', {}).get('score')}",
+                      f"- Clarification probability: {c.get('requires_clarification_probability')}",
+                      f"- Review recommended: {c.get('review_recommended')}"])
+    else:
+        lines.append(f"Jev classification status: {assessment.classification_status}.")
     for finding in assessment.impacts:
         lines.extend(["", f"### {finding.repository}: {finding.claim}", "", finding.business_relevance])
         for uncertainty in finding.uncertainties:
@@ -81,6 +128,29 @@ def render_report(assessment: Assessment) -> str:
                           f"  Evidence: {', '.join(risk.evidence_ids)}"])
     else:
         lines.append("No specific risk was verified from retrieved evidence.")
+    lines.extend(["", "## Code recommendations from web research", ""])
+    if assessment.code_recommendation_status == "ready":
+        for item in assessment.code_recommendations:
+            lines.extend([f"### {item.repository}: {item.title}", "", item.recommendation,
+                          "", f"Why it fits: {item.rationale}",
+                          "Local evidence: " + ", ".join(f"`{eid}`" for eid in item.evidence_ids)])
+            if item.code_example:
+                example = item.code_example.replace("```", "''' ")
+                lines.extend(["", "```python", example, "```"])
+            if item.sources:
+                lines.extend(["", "Sources:"])
+                lines.extend([f"- [{source['title']}]({source['url']})" for source in item.sources])
+            lines.append("")
+    elif assessment.code_recommendation_status == "unavailable":
+        lines.append("Industry recommendations could not be retrieved; the evidence-backed impact assessment is still available.")
+    elif assessment.code_recommendation_status == "not_configured":
+        lines.append("Set OPENAI_API_KEY to enable cited web recommendations.")
+    elif assessment.code_recommendation_status == "disabled":
+        lines.append("Web recommendations are disabled by CODE_RECOMMENDATIONS_ENABLED.")
+    elif assessment.code_recommendation_status == "skipped_no_verified_impacts":
+        lines.append("No verified impact was available to scope a code recommendation.")
+    else:
+        lines.append("No recommendation with a verified web citation was returned.")
     lines.extend(["", "## Technical-debt candidates", ""])
     decisions = assessment.debt_assessments
     candidates = [x for x in decisions if x.disposition != "do_not_recommend"]
@@ -104,6 +174,10 @@ def render_report(assessment: Assessment) -> str:
     for evidence in assessment.evidence:
         ref = f"{evidence.repository}@{evidence.commit}:{evidence.path}:{evidence.line_start}-{evidence.line_end}"
         lines.append(f"- `{evidence.evidence_id}` — `{ref}` ({evidence.document_type}, {evidence.section})")
+    if assessment.langfuse_trace_url:
+        lines.extend(["", f"[Open Langfuse trace]({assessment.langfuse_trace_url})"])
+    elif assessment.langfuse_trace_status == "not_configured":
+        lines.extend(["", "Langfuse tracing is not configured for this run."])
     lines.append("")
     return "\n".join(lines)
 
@@ -118,8 +192,11 @@ class AssessmentWorkflow:
         elif backend == "hosted":
             from .integrations.hosted_store import HostedEvidenceStore
             self.store = HostedEvidenceStore(self.workspace, self.state_dir)
+        elif backend == "pinecone":
+            from .integrations.hosted_store import PineconeEvidenceStore
+            self.store = PineconeEvidenceStore(self.workspace, self.state_dir)
         else:
-            raise ValueError("IMPACT_EVIDENCE_BACKEND must be 'local' or 'hosted'")
+            raise ValueError("IMPACT_EVIDENCE_BACKEND must be 'local', 'pinecone', or 'hosted'")
         self.max_hours, self.tool_budget, self.graph_hops = max_hours, tool_budget, graph_hops
 
     def run(self, ticket: dict, rebuild_snapshot=True) -> Assessment:
@@ -134,6 +211,8 @@ class AssessmentWorkflow:
         trace = Trace(run_id)
         trace.add("coordinator", "routing", "start-assessment",
                   {"ticket_id": ticket_id, "ticket_version": ticket_version, "snapshot_id": snapshot["snapshot_id"]})
+        from .integrations.jev_classifier import classify_jira_requirement
+        classification_status, classification = classify_jira_requirement(ticket, trace)
 
         investigator = ImpactInvestigationAgent(self.store, trace, self.tool_budget, self.graph_hops)
         investigation = investigator.investigate(ticket)
@@ -171,6 +250,16 @@ class AssessmentWorkflow:
         assessment = Assessment(context, status,
             ticket.get("summary", "Untitled requirement"), investigation["impacts"],
             investigation["paths"], debt, risks, questions, _dedupe(limitations), evidence, trace.events)
+        assessment.classification_status = classification_status
+        assessment.classification = classification
+        from .integrations.code_recommendations import generate_code_recommendations
+        (assessment.code_recommendation_status,
+         assessment.code_recommendations) = generate_code_recommendations(assessment, trace)
+        from .integrations.langfuse_trace import export_assessment
+        langfuse = export_assessment(assessment)
+        assessment.langfuse_trace_status = langfuse["status"] or "error"
+        assessment.langfuse_trace_id = langfuse["trace_id"]
+        assessment.langfuse_trace_url = langfuse["trace_url"]
         assessment.report_markdown = render_report(assessment)
         self.persist(assessment)
         return assessment

@@ -1,5 +1,7 @@
 # Technical Debt Agent plan
 
+> **Implementation status:** Debt retrieval and eligibility checks are implemented in `impact_assessment/agents.py`, including status/estimate gates, component overlap, shared-test checks, and the configurable effort ceiling. MCP exposes debt search and inventory tools. Estimates in the sample corpus remain illustrative unless explicitly reviewed by the owning team.
+
 ## Purpose
 
 Find small repository-local technical enhancements that overlap with the requirement's implementation and testing. Recommend opportunities to avoid repeated testing, without automatically expanding ticket scope.
